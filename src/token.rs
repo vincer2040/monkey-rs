@@ -21,6 +21,8 @@ pub enum Token {
     RParen,
     LSquirly,
     RSquirly,
+    LBracket,
+    RBracket,
     Function,
     Let,
     If,
