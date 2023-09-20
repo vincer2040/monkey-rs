@@ -47,6 +47,7 @@ pub enum Expression {
     Identifier(Identifier),
     Integer(IntegerLiteral),
     String(StringLiteral),
+    Array(ArrayLiteral),
     Boolean(BooleanLiteral),
     PrefixExpression(PrefixExpression),
     InfixExpression(InfixExpression),
@@ -71,6 +72,12 @@ pub struct BooleanLiteral {
 pub struct StringLiteral {
     pub tok: Token,
     pub value: std::sync::Arc<str>,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct ArrayLiteral {
+    pub tok: Token, /* the LBracket token */
+    pub elements: Vec<Expression>,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -258,6 +265,24 @@ impl Node for StringLiteral {
     }
 }
 
+impl Node for ArrayLiteral {
+    fn token_literal(&self) -> String {
+        "[".to_owned()
+    }
+    fn string(&self) -> String {
+        let mut res = String::new();
+        res.push('[');
+        for (i, exp) in self.elements.iter().enumerate() {
+            res.push_str(&exp.string());
+            if i != self.elements.len() - 1 {
+                res.push_str(", ");
+            }
+        }
+        res.push(']');
+        res
+    }
+}
+
 impl Node for PrefixExpression {
     fn token_literal(&self) -> String {
         todo!()
@@ -346,6 +371,7 @@ impl Node for Expression {
             Expression::Integer(i) => i.string(),
             Expression::Boolean(b) => b.string(),
             Expression::String(s) => s.string(),
+            Expression::Array(a) => a.string(),
             Expression::PrefixExpression(pe) => pe.string(),
             Expression::InfixExpression(ie) => ie.string(),
             Expression::IfExpression(ife) => ife.string(),

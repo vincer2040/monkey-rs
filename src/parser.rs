@@ -1,5 +1,5 @@
 use crate::ast::{
-    BlockStatement, BooleanLiteral, CallExpression, Expression, ExpressionStatement,
+    ArrayLiteral, BlockStatement, BooleanLiteral, CallExpression, Expression, ExpressionStatement,
     FunctionLiteral, Identifier, IfExpression, InfixExpression, InfixOperator, IntegerLiteral,
     LetStatement, PrefixExpression, PrefixOperator, Program, ReturnStatement, Statement,
     StringLiteral,
@@ -140,6 +140,14 @@ impl Parser {
             Token::LParen => self.parse_grouped_expression(),
             Token::If => self.parse_if_expression(),
             Token::Function => self.parse_function_literal(),
+            Token::LBracket => {
+                let tok = self.cur.clone();
+                let elements_opt = self.parse_expression_list(Token::RBracket);
+                match elements_opt {
+                    Some(elements) => Some(Expression::Array(ArrayLiteral { tok, elements })),
+                    None => return None,
+                }
+            }
             _ => {
                 let e = format!("no prefix parse fn for {:#?}", self.cur);
                 self.errors.push(e);
@@ -385,7 +393,7 @@ impl Parser {
     fn parse_call_expression(&mut self, func: Expression) -> Option<Expression> {
         let tok = self.cur.clone();
         let function = std::rc::Rc::new(func);
-        match self.parse_call_arguments() {
+        match self.parse_expression_list(Token::RParen) {
             Some(arguments) => Some(Expression::CallExpression(CallExpression {
                 tok,
                 function,
@@ -395,9 +403,9 @@ impl Parser {
         }
     }
 
-    fn parse_call_arguments(&mut self) -> Option<Vec<Expression>> {
-        let mut res: Vec<Expression> = Vec::new();
-        if self.peek_token_is(&Token::RParen) {
+    fn parse_expression_list(&mut self, end: Token) -> Option<Vec<Expression>> {
+        let mut res = Vec::new();
+        if self.peek_token_is(&end) {
             self.next_token();
             return Some(res);
         }
@@ -405,7 +413,7 @@ impl Parser {
         match self.parse_expression(Precedence::Lowest) {
             Some(e) => res.push(e),
             None => return None,
-        }
+        };
         while self.peek_token_is(&Token::Comma) {
             self.next_token();
             self.next_token();
@@ -414,7 +422,7 @@ impl Parser {
                 None => return None,
             };
         }
-        if !self.expect_peek(Token::RParen) {
+        if !self.expect_peek(end) {
             return None;
         }
         Some(res)
@@ -557,7 +565,7 @@ mod test {
     fn check_errors(p: &Parser) {
         if p.errors_len() > 0 {
             for e in p.get_errors() {
-                println!("{}", e);
+                eprintln!("{}", e);
             }
             panic!("parser had errors")
         }
@@ -1157,6 +1165,26 @@ mod test {
                 assert_eq!(s.value.to_string(), "hello world".to_owned());
             } else {
                 panic!("{:#?} is not a string", es.expression);
+            }
+        } else {
+            let s = format!("{:#?} is not an expression statement", stmt);
+            panic!("{}", s);
+        }
+    }
+
+    #[test]
+    fn test_array_literals() {
+        let input = "[1, 2 * 2, 3 + 3]";
+        let l = Lexer::new(input);
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        assert_eq!(program.statements.len(), 1);
+        let stmt = &program.statements[0];
+        if let Statement::ExpressionStatement(es) = stmt {
+            if let Expression::Array(arr) = &es.expression {
+                assert_eq!(arr.elements.len(), 3);
+            } else {
+                panic!("{:#?} is not a array", es.expression);
             }
         } else {
             let s = format!("{:#?} is not an expression statement", stmt);

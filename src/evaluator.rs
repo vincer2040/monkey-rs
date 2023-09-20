@@ -124,6 +124,7 @@ fn eval_expression(e: &Expression, env: &mut Environment) -> Option<Object> {
                 None => return None,
             }
         }
+        _ => None,
     }
 }
 
