@@ -48,7 +48,7 @@ fn eval_expression(e: &Expression) -> Option<Object> {
 fn eval_prefix_expression(pe: &PrefixExpression, right: &Object) -> Option<Object> {
     match pe.operator {
         PrefixOperator::Bang => Some(eval_bang_operator(right)),
-        PrefixOperator::Minus => todo!(),
+        PrefixOperator::Minus => Some(eval_minus_operator(right)),
     }
 }
 
@@ -57,6 +57,13 @@ fn eval_bang_operator(right: &Object) -> Object {
         Object::Boolean(v) => native_bool_to_bool_object(!*v),
         Object::Null => TRUE,
         _ => FALSE,
+    }
+}
+
+fn eval_minus_operator(right: &Object) -> Object {
+    match right {
+        Object::Integer(v) => Object::Integer(-v),
+        _ => NULL,
     }
 }
 
@@ -112,6 +119,14 @@ mod test {
             IntTest {
                 input: "10",
                 exp: 10,
+            },
+            IntTest {
+                input: "-5",
+                exp: -5,
+            },
+            IntTest {
+                input: "-10",
+                exp: -10,
             },
         ];
 
