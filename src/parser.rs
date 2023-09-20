@@ -86,19 +86,30 @@ impl Parser {
         if !self.expect_peek(Token::Assign) {
             return None;
         }
-        while !self.cur_token_is(Token::Semicolon) {
+        self.next_token();
+        let value_opt = self.parse_expression(Precedence::Lowest);
+        let res = match value_opt {
+            Some(value) => Some(Statement::LetStatement(LetStatement { tok, name, value })),
+            None => None,
+        };
+        if self.peek_token_is(&Token::Semicolon) {
             self.next_token();
         }
-        Some(Statement::LetStatement(LetStatement { tok, name }))
+        res
     }
 
     fn parse_return_statement(&mut self) -> Option<Statement> {
         let tok = self.cur.clone();
         self.next_token();
-        while !self.cur_token_is(Token::Semicolon) {
+        let value_opt = self.parse_expression(Precedence::Lowest);
+        let res = match value_opt {
+            Some(value) => Some(Statement::ReturnStatement(ReturnStatement { tok, value })),
+            None => None,
+        };
+        if self.peek_token_is(&Token::Semicolon) {
             self.next_token();
         }
-        Some(Statement::ReturnStatement(ReturnStatement { tok }))
+        res
     }
 
     fn parse_expression_statement(&mut self) -> Option<Statement> {
@@ -577,10 +588,16 @@ mod test {
         let program = p.parse();
         check_errors(&p);
         let exps = vec!["x", "y", "foobar"];
+        let exp_int: Vec<i64> = vec![5, 10, 838383];
         assert_eq!(program.statements.len(), 3);
         for (i, exp) in exps.iter().enumerate() {
             let stmt = &program.statements[i];
             test_let_statement(&stmt, exp);
+            if let Statement::LetStatement(ls) = stmt {
+                test_integer_exp(&ls.value, exp_int[i]);
+            } else {
+                panic!("this should have failed earlier")
+            }
         }
     }
 
@@ -594,9 +611,11 @@ mod test {
         let program = p.parse();
         check_errors(&p);
         assert_eq!(program.statements.len(), 3);
-        for stmt in program.statements.iter() {
+        let exp_ints = vec![5, 10, 993322];
+        for (i, stmt) in program.statements.iter().enumerate() {
             if let Statement::ReturnStatement(rs) = stmt {
                 assert_eq!(rs.token_literal(), "return".to_string());
+                test_integer_exp(&rs.value, exp_ints[i]);
             } else {
                 let s = format!("{:#?} is not a return statement", stmt);
                 panic!("{}", s);

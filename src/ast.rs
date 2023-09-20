@@ -20,6 +20,7 @@ pub enum Statement {
 pub struct LetStatement {
     pub tok: Token, /* the Let token */
     pub name: Identifier,
+    pub value: Expression,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -31,6 +32,7 @@ pub struct Identifier {
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct ReturnStatement {
     pub tok: Token, /* the Return token */
+    pub value: Expression,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -168,6 +170,7 @@ impl Node for LetStatement {
         res.push(' ');
         res.push_str(&self.name.string());
         res.push_str(" = ");
+        res.push_str(&self.value.string());
         res.push(';');
         res
     }
@@ -196,6 +199,7 @@ impl Node for ReturnStatement {
         let mut res = String::new();
         res.push_str(&self.token_literal());
         res.push(' ');
+        res.push_str(&self.value.string());
         res.push(';');
         res
     }
