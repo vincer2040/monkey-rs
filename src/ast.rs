@@ -373,3 +373,18 @@ impl Node for CallExpression {
         res
     }
 }
+
+impl ToString for InfixOperator {
+    fn to_string(&self) -> String {
+        match self {
+            InfixOperator::Plus => "+".to_owned(),
+            InfixOperator::Minus => "-".to_owned(),
+            InfixOperator::Asterisk => "*".to_owned(),
+            InfixOperator::Slash => "/".to_owned(),
+            InfixOperator::Lt => "<".to_owned(),
+            InfixOperator::Gt => ">".to_owned(),
+            InfixOperator::Eq => "==".to_owned(),
+            InfixOperator::NotEq => "!=".to_owned(),
+        }
+    }
+}

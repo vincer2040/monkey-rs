@@ -4,7 +4,7 @@ use crate::ast::{
     Expression, ExpressionStatement, IfExpression, InfixOperator, PrefixExpression, PrefixOperator,
     Program, Statement,
 };
-use crate::object::Object;
+use crate::object::{Object, ObjectTrait};
 
 const TRUE: Object = Object::Boolean(true);
 const FALSE: Object = Object::Boolean(false);
@@ -24,6 +24,7 @@ fn eval_statements(statements: &Vec<Statement>) -> Option<Object> {
                     let x = ret.deref().to_owned();
                     return Some(x);
                 }
+                Object::Error(_) => return Some(o),
                 _ => {}
             }
         }
@@ -94,25 +95,49 @@ fn eval_bang_operator(right: &Object) -> Object {
 fn eval_minus_operator(right: &Object) -> Object {
     match right {
         Object::Integer(v) => Object::Integer(-v),
-        _ => NULL,
+        _ => Object::Error(format!("unknown operator: -{}", right.type_string())),
     }
 }
 
 fn eval_infix_expression(left: &Object, right: &Object, operator: &InfixOperator) -> Object {
+    let lval: i64;
+    let rval: i64;
+    if left.type_val() != right.type_val() {
+        return Object::Error(format!(
+            "type mismatch: {} {} {}",
+            left.type_string(),
+            operator.to_string(),
+            right.type_string()
+        ));
+    }
     match operator {
         InfixOperator::Eq => return native_bool_to_bool_object(left == right),
         InfixOperator::NotEq => return native_bool_to_bool_object(left != right),
         _ => {}
     };
-    let lval = match left {
-        Object::Integer(val) => val,
-        _ => return NULL,
+    match left {
+        Object::Integer(val) => lval = *val,
+        _ => {
+            return Object::Error(format!(
+                "unknown operator: {} {} {}",
+                left.type_string(),
+                operator.to_string(),
+                right.type_string()
+            ))
+        }
     };
-    let rval = match right {
-        Object::Integer(val) => val,
-        _ => return NULL,
+    match right {
+        Object::Integer(val) => rval = *val,
+        _ => {
+            return Object::Error(format!(
+                "unknown operator: {} {} {}",
+                left.type_string(),
+                operator.to_string(),
+                right.type_string()
+            ))
+        }
     };
-    eval_integer_infix_expression(*lval, *rval, operator)
+    eval_integer_infix_expression(lval, rval, operator)
 }
 
 fn eval_integer_infix_expression(lval: i64, rval: i64, operator: &InfixOperator) -> Object {
@@ -151,9 +176,8 @@ fn eval_block_statments(statements: &Vec<Statement>) -> Option<Object> {
         obj = eval_statement(stmt);
         if let Some(o) = obj.clone() {
             match o {
-                Object::Return(_) => {
-                    return Some(o);
-                }
+                Object::Return(_) => return Some(o),
+                Object::Error(_) => return Some(o),
                 _ => {}
             }
         }
@@ -194,6 +218,11 @@ mod test {
     struct IfElseTest {
         input: &'static str,
         exp: Option<i64>,
+    }
+
+    struct ErrorTest {
+        input: &'static str,
+        exp: &'static str,
     }
 
     fn test_eval(input: &str) -> Option<Object> {
@@ -509,6 +538,56 @@ mod test {
                 test_int_object(&obj, test.exp);
             } else {
                 panic!("evaluator returned None");
+            }
+        }
+    }
+
+    #[test]
+    fn test_error_handling() {
+        let tests = vec![
+            ErrorTest {
+                input: "5 + true",
+                exp: "type mismatch: INTEGER + BOOLEAN",
+            },
+            ErrorTest {
+                input: "5 + true; 5;",
+                exp: "type mismatch: INTEGER + BOOLEAN",
+            },
+            ErrorTest {
+                input: "-true",
+                exp: "unknown operator: -BOOLEAN",
+            },
+            ErrorTest {
+                input: "true + false;",
+                exp: "unknown operator: BOOLEAN + BOOLEAN",
+            },
+            ErrorTest {
+                input: "5; true + false; 5",
+                exp: "unknown operator: BOOLEAN + BOOLEAN",
+            },
+            ErrorTest {
+                input: "if (10 > 1) { true + false; }",
+                exp: "unknown operator: BOOLEAN + BOOLEAN",
+            },
+            ErrorTest {
+                input: "if (10 > 1) {
+                    if (10 > 1) {
+                        return true + false;
+                    }
+                    return 1;
+                }",
+                exp: "unknown operator: BOOLEAN + BOOLEAN",
+            },
+        ];
+
+        for test in tests.iter() {
+            let obj = test_eval(test.input);
+            match obj {
+                Some(v) => match v {
+                    Object::Error(v) => assert_eq!(v, test.exp.to_owned()),
+                    _ => panic!("{:#?} is not an error object", v),
+                },
+                None => panic!("eval returned none"),
             }
         }
     }
