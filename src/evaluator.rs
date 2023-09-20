@@ -5,7 +5,7 @@ use crate::ast::{
     Program, Statement,
 };
 use crate::environment::Environment;
-use crate::object::{Object, ObjectTrait, ObjectType};
+use crate::object::{Function, Object, ObjectTrait, ObjectType};
 
 const TRUE: Object = Object::Boolean(true);
 const FALSE: Object = Object::Boolean(false);
@@ -105,7 +105,33 @@ fn eval_expression(e: &Expression, env: &mut Environment) -> Option<Object> {
             Some(eval_infix_expression(&left, &right, &ie.operator))
         }
         Expression::IfExpression(ife) => eval_if_expression(&ife, env),
-        _ => None,
+        Expression::FunctionLiteral(func) => Some(Object::Function(Function {
+            parameters: func.parameters.clone(),
+            body: func.body.clone(),
+            env: env.clone(),
+        })),
+        Expression::CallExpression(call) => {
+            let func_opt = eval_expression(&call.function, env);
+            match func_opt {
+                Some(func_obj) => {
+                    if func_obj.type_val() == ObjectType::Error {
+                        return Some(func_obj);
+                    }
+                    let args = eval_expressions(&call.arguments, env);
+                    if args.len() == 1 && args[0].type_val() == ObjectType::Error {
+                        return Some(args[0].clone());
+                    }
+                    match func_obj {
+                        Object::Function(func) => apply_function(&func, &args),
+                        _ => Some(Object::Error(format!(
+                            "not a function: {}",
+                            func_obj.type_string()
+                        ))),
+                    }
+                }
+                None => return None,
+            }
+        }
     }
 }
 
@@ -217,6 +243,43 @@ fn eval_block_statments(statements: &Vec<Statement>, env: &mut Environment) -> O
     obj
 }
 
+fn eval_expressions(exps: &Vec<Expression>, env: &mut Environment) -> Vec<Object> {
+    let mut res = Vec::new();
+    for exp in exps.iter() {
+        let obj = match eval_expression(&exp, env) {
+            Some(o) => o,
+            None => return Vec::new(),
+        };
+        if obj.type_val() == ObjectType::Error {
+            res = Vec::new();
+            res.push(obj);
+            return res;
+        }
+        res.push(obj);
+    }
+    res
+}
+
+fn apply_function(func: &Function, args: &Vec<Object>) -> Option<Object> {
+    let mut extended = extend_function_env(func, args);
+    let evaluated = eval_block_statments(&func.body.statements, &mut extended);
+    match evaluated {
+        Some(e) => Some(unwrap_return_value(e)),
+        None => None,
+    }
+}
+
+fn extend_function_env(func: &Function, args: &Vec<Object>) -> Environment {
+    let mut env = Environment::new_enclosed_env(&func.env);
+
+    for (i, param) in func.parameters.iter().enumerate() {
+        let arg = args[i].clone();
+        env.set(param.value.clone(), arg);
+    }
+
+    env
+}
+
 fn native_bool_to_bool_object(input: bool) -> Object {
     if input {
         TRUE
@@ -233,10 +296,18 @@ fn is_truthy(obj: &Object) -> bool {
     }
 }
 
+fn unwrap_return_value(obj: Object) -> Object {
+    match obj {
+        Object::Return(val) => val.deref().clone(),
+        _ => obj,
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::{
-        environment::Environment, evaluator::eval, lexer::Lexer, object::Object, parser::Parser,
+        ast::Node, environment::Environment, evaluator::eval, lexer::Lexer, object::Object,
+        parser::Parser,
     };
 
     struct IntTest {
@@ -649,6 +720,66 @@ mod test {
             IntTest {
                 input: "let a = 5; let b = a; let c = a + b + 5; c;",
                 exp: 15,
+            },
+        ];
+
+        for test in tests.iter() {
+            let obj_opt = test_eval(test.input);
+            if let Some(obj) = obj_opt {
+                test_int_object(&obj, test.exp);
+            } else {
+                panic!("evaluator returned None");
+            }
+        }
+    }
+
+    #[test]
+    fn test_function_object() {
+        let input = "fn(x) { x + 2; };";
+        let obj = test_eval(input);
+        match obj {
+            Some(o) => {
+                if let Object::Function(func) = o {
+                    assert_eq!(func.parameters.len(), 1);
+                    let param1 = &func.parameters[0];
+                    assert_eq!(param1.value.to_string(), "x".to_owned());
+                    let exp_body = "(x + 2)";
+                    let s = func.body.string();
+                    assert_eq!(exp_body.to_owned(), s);
+                } else {
+                    panic!("{:#?} is not a function", o);
+                }
+            }
+            None => panic!("eval returned none"),
+        }
+    }
+
+    #[test]
+    fn test_function_application() {
+        let tests = vec![
+            IntTest {
+                input: "let identity = fn(x) { x; }; identity(5);",
+                exp: 5,
+            },
+            IntTest {
+                input: "let identity = fn(x) { return x; }; identity(5);",
+                exp: 5,
+            },
+            IntTest {
+                input: "let double = fn(x) { x * 2; }; double(5);",
+                exp: 10,
+            },
+            IntTest {
+                input: "let add = fn(x, y) { x + y; }; add(5, 5);",
+                exp: 10,
+            },
+            IntTest {
+                input: "let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));",
+                exp: 20,
+            },
+            IntTest {
+                input: "fn(x) { x; }(5)",
+                exp: 5,
             },
         ];
 
