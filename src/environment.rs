@@ -17,7 +17,7 @@ impl Environment {
         self.store.insert(name, val);
     }
 
-    pub fn get(&mut self, name: std::sync::Arc<str>) -> Option<&Object> {
-        self.store.get(&name)
+    pub fn get(&mut self, name: &std::sync::Arc<str>) -> Option<&Object> {
+        self.store.get(name)
     }
 }

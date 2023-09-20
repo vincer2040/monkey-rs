@@ -70,7 +70,7 @@ fn eval_expression(e: &Expression, env: &mut Environment) -> Option<Object> {
     match e {
         Expression::Integer(val) => Some(Object::Integer(val.value)),
         Expression::Boolean(val) => Some(native_bool_to_bool_object(val.value)),
-        Expression::Identifier(val) => match env.get(val.value.clone()) {
+        Expression::Identifier(val) => match env.get(&val.value) {
             Some(v) => Some(v.clone()),
             None => Some(Object::Error(format!(
                 "identifier not found: {}",
