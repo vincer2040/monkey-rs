@@ -9,6 +9,8 @@ pub trait ObjectTrait {
     fn inspect(&self) -> String;
 }
 
+type BuiltinFunction = fn(args: &Vec<Object>) -> Object;
+
 #[derive(PartialEq, Eq)]
 pub enum ObjectType {
     Null,
@@ -18,6 +20,7 @@ pub enum ObjectType {
     Error,
     Function,
     String,
+    Builtin,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -29,6 +32,7 @@ pub enum Object {
     Error(String),
     Function(Function),
     String(std::sync::Arc<str>),
+    Builtin(Builtin),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -36,6 +40,11 @@ pub struct Function {
     pub parameters: Vec<Identifier>,
     pub body: BlockStatement,
     pub env: Environment,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Builtin {
+    pub func: BuiltinFunction,
 }
 
 impl ObjectTrait for Object {
@@ -48,6 +57,7 @@ impl ObjectTrait for Object {
             Self::Return(_) => ObjectType::Return,
             Self::Error(_) => ObjectType::Error,
             Self::Function(_) => ObjectType::Function,
+            Self::Builtin(_) => ObjectType::Builtin,
         }
     }
     fn type_string(&self) -> &'static str {
@@ -59,6 +69,7 @@ impl ObjectTrait for Object {
             Self::Return(_) => "RETURN",
             Self::Error(_) => "ERROR",
             Self::Function(_) => "FUNCTION",
+            Self::Builtin(_) => "BUILTIN",
         }
     }
 
@@ -85,6 +96,7 @@ impl ObjectTrait for Object {
                 res.push_str("\n}");
                 res
             }
+            Self::Builtin(_) => "builtin function".to_owned(),
         }
     }
 }

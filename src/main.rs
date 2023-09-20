@@ -9,6 +9,7 @@ pub mod parser;
 pub mod token;
 pub mod util;
 pub mod environment;
+pub mod builtins;
 
 const PROMP: &'static str = ">> ";
 

@@ -4,12 +4,15 @@ use crate::ast::{
     Expression, ExpressionStatement, IfExpression, InfixOperator, PrefixExpression, PrefixOperator,
     Program, Statement,
 };
+use crate::builtins::len;
 use crate::environment::Environment;
-use crate::object::{Function, Object, ObjectTrait, ObjectType};
+use crate::object::{Builtin, Function, Object, ObjectTrait, ObjectType};
 
 const TRUE: Object = Object::Boolean(true);
 const FALSE: Object = Object::Boolean(false);
 const NULL: Object = Object::Null;
+
+const LEN: Object = Object::Builtin(Builtin { func: len });
 
 pub fn eval(program: &Program, env: &mut Environment) -> Option<Object> {
     eval_statements(&program.statements, env)
@@ -71,13 +74,7 @@ fn eval_expression(e: &Expression, env: &mut Environment) -> Option<Object> {
         Expression::Integer(val) => Some(Object::Integer(val.value)),
         Expression::Boolean(val) => Some(native_bool_to_bool_object(val.value)),
         Expression::String(val) => Some(Object::String(val.value.clone())),
-        Expression::Identifier(val) => match env.get(&val.value) {
-            Some(v) => Some(v.clone()),
-            None => Some(Object::Error(format!(
-                "identifier not found: {}",
-                val.value
-            ))),
-        },
+        Expression::Identifier(val) => Some(eval_identifier(&val.value, env)),
         Expression::PrefixExpression(pe) => {
             let right = match eval_expression(&pe.right, env) {
                 Some(val) => val,
@@ -122,13 +119,7 @@ fn eval_expression(e: &Expression, env: &mut Environment) -> Option<Object> {
                     if args.len() == 1 && args[0].type_val() == ObjectType::Error {
                         return Some(args[0].clone());
                     }
-                    match func_obj {
-                        Object::Function(func) => apply_function(&func, &args),
-                        _ => Some(Object::Error(format!(
-                            "not a function: {}",
-                            func_obj.type_string()
-                        ))),
-                    }
+                    apply_function(&func_obj, &args)
                 }
                 None => return None,
             }
@@ -272,6 +263,18 @@ fn eval_block_statments(statements: &Vec<Statement>, env: &mut Environment) -> O
     obj
 }
 
+fn eval_identifier(name: &std::sync::Arc<str>, env: &Environment) -> Object {
+    match env.get(name) {
+        Some(v) => v.clone(),
+        None => {
+            if name.to_string() == "len".to_owned() {
+                return LEN;
+            }
+            Object::Error(format!("identifier not found: {}", name))
+        }
+    }
+}
+
 fn eval_expressions(exps: &Vec<Expression>, env: &mut Environment) -> Vec<Object> {
     let mut res = Vec::new();
     for exp in exps.iter() {
@@ -289,12 +292,25 @@ fn eval_expressions(exps: &Vec<Expression>, env: &mut Environment) -> Vec<Object
     res
 }
 
-fn apply_function(func: &Function, args: &Vec<Object>) -> Option<Object> {
-    let mut extended = extend_function_env(func, args);
-    let evaluated = eval_block_statments(&func.body.statements, &mut extended);
-    match evaluated {
-        Some(e) => Some(unwrap_return_value(e)),
-        None => None,
+fn apply_function(func_obj: &Object, args: &Vec<Object>) -> Option<Object> {
+    match func_obj {
+        Object::Function(func) => {
+            let mut extended = extend_function_env(func, args);
+            let evaluated = eval_block_statments(&func.body.statements, &mut extended);
+            match evaluated {
+                Some(e) => Some(unwrap_return_value(e)),
+                None => None,
+            }
+        }
+        Object::Builtin(builtin) => {
+            let fun = builtin.func;
+            let r = fun(args);
+            Some(r)
+        }
+        _ => Some(Object::Error(format!(
+            "not a function: {}",
+            func_obj.type_string()
+        ))),
     }
 }
 
@@ -721,6 +737,14 @@ mod test {
                 input: "\"Hello\" - \"World\"",
                 exp: "unknown operator: STRING - STRING",
             },
+            ErrorTest {
+                input: "len(1)",
+                exp: "argument to `len` not supported, got INTEGER",
+            },
+            ErrorTest {
+                input: "len(\"one\", \"two\")",
+                exp: "wrong number of arguments. got=2, want=1",
+            },
         ];
 
         for test in tests.iter() {
@@ -869,6 +893,33 @@ mod test {
             }
         } else {
             panic!("evaluator returned None");
+        }
+    }
+
+    #[test]
+    fn test_builtin_functions() {
+        let tests = vec![
+            IntTest {
+                input: "len(\"\")",
+                exp: 0,
+            },
+            IntTest {
+                input: "len(\"four\")",
+                exp: 4,
+            },
+            IntTest {
+                input: "len(\"hello world\")",
+                exp: 11,
+            },
+        ];
+
+        for test in tests {
+            let obj_opt = test_eval(test.input);
+            if let Some(obj) = obj_opt {
+                test_int_object(&obj, test.exp);
+            } else {
+                panic!("evaluator returned None");
+            }
         }
     }
 }
