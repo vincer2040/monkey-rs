@@ -47,6 +47,7 @@ pub enum Expression {
     PrefixExpression(PrefixExpression),
     InfixExpression(InfixExpression),
     IfExpression(IfExpression),
+    FunctionLiteral(FunctionLiteral),
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -106,6 +107,13 @@ pub struct IfExpression {
 pub struct BlockStatement {
     pub tok: Token, /* the { token */
     pub statements: Vec<Statement>,
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub struct FunctionLiteral {
+    pub tok: Token, /* the Fn token */
+    pub parameters: Vec<Identifier>,
+    pub body: BlockStatement,
 }
 
 impl Node for Program {
@@ -307,6 +315,28 @@ impl Node for Expression {
             Expression::PrefixExpression(pe) => pe.string(),
             Expression::InfixExpression(ie) => ie.string(),
             Expression::IfExpression(ife) => ife.string(),
+            Expression::FunctionLiteral(fne) => fne.string(),
         }
+    }
+}
+
+impl Node for FunctionLiteral {
+    fn token_literal(&self) -> String {
+        "fn".to_owned()
+    }
+
+    fn string(&self) -> String {
+        let mut res = String::new();
+        res.push_str(&self.token_literal());
+        res.push('(');
+        for (i, ident) in self.parameters.iter().enumerate() {
+            res.push_str(&ident.string());
+            if i != self.parameters.len() {
+                res.push_str(", ");
+            }
+        }
+        res.push_str(") ");
+        res.push_str(&self.body.string());
+        res
     }
 }

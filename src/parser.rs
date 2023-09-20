@@ -1,7 +1,7 @@
 use crate::ast::{
-    BlockStatement, BooleanLiteral, Expression, ExpressionStatement, Identifier, IfExpression,
-    InfixExpression, InfixOperator, IntegerLiteral, LetStatement, PrefixExpression, PrefixOperator,
-    Program, ReturnStatement, Statement,
+    BlockStatement, BooleanLiteral, Expression, ExpressionStatement, FunctionLiteral, Identifier,
+    IfExpression, InfixExpression, InfixOperator, IntegerLiteral, LetStatement, PrefixExpression,
+    PrefixOperator, Program, ReturnStatement, Statement,
 };
 use crate::lexer::Lexer;
 use crate::token::Token;
@@ -126,6 +126,7 @@ impl Parser {
             Token::True | Token::False => Some(self.parse_boolean_literal()),
             Token::LParen => self.parse_grouped_expression(),
             Token::If => self.parse_if_expression(),
+            Token::Function => self.parse_function_literal(),
             _ => {
                 let e = format!("no prefix parse fn for {:#?}", self.cur);
                 self.errors.push(e);
@@ -293,6 +294,60 @@ impl Parser {
             self.next_token();
         }
         BlockStatement { tok, statements }
+    }
+
+    fn parse_function_literal(&mut self) -> Option<Expression> {
+        let tok = self.cur.clone();
+        if !self.expect_peek(Token::LParen) {
+            return None;
+        }
+        let parameters_opt = self.parse_function_parameters();
+        let parameters = match parameters_opt {
+            Some(p) => p,
+            None => return None,
+        };
+        if !self.expect_peek(Token::LSquirly) {
+            return None;
+        }
+        let body = self.parse_block_statement();
+        Some(Expression::FunctionLiteral(FunctionLiteral {
+            tok,
+            parameters,
+            body,
+        }))
+    }
+
+    fn parse_function_parameters(&mut self) -> Option<Vec<Identifier>> {
+        let mut res = Vec::new();
+        if self.peek_token_is(&Token::RParen) {
+            self.next_token();
+            return Some(res);
+        }
+        self.next_token();
+        let mut ident = match &self.cur {
+            Token::Ident(v) => Identifier {
+                tok: self.cur.clone(),
+                value: v.clone(),
+            },
+            _ => return None,
+        };
+        res.push(ident);
+        while self.peek_token_is(&Token::Comma) {
+            self.next_token();
+            self.next_token();
+            ident = match &self.cur {
+                Token::Ident(v) => Identifier {
+                    tok: self.cur.clone(),
+                    value: v.clone(),
+                },
+                _ => return None,
+            };
+            res.push(ident);
+        }
+        if !self.expect_peek(Token::RParen) {
+            return None;
+        }
+        Some(res)
     }
 
     fn next_token(&mut self) {
@@ -919,6 +974,38 @@ mod test {
             } else {
                 let s = format!("{:#?} is not an if expression", es);
                 panic!("{}", s);
+            }
+        } else {
+            let s = format!("{:#?} is not an expression statement", stmt);
+            panic!("{}", s);
+        }
+    }
+
+    #[test]
+    fn test_function_literal() {
+        let input = "fn(x, y) { x + y; }";
+        let l = Lexer::new(&input);
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        assert_eq!(program.statements.len(), 1);
+        let stmt = &program.statements[0];
+        if let Statement::ExpressionStatement(es) = stmt {
+            if let Expression::FunctionLiteral(fne) = &es.expression {
+                assert_eq!(fne.parameters.len(), 2);
+                let ident1 = &fne.parameters[0];
+                let ident2 = &fne.parameters[1];
+                assert_eq!(ident1.value.to_string(), "x".to_owned());
+                assert_eq!(ident2.value.to_string(), "y".to_owned());
+                assert_eq!(fne.body.statements.len(), 1);
+                let body_stmt = &fne.body.statements[0];
+                if let Statement::ExpressionStatement(es) = body_stmt {
+                    test_ident_infix_exp(&es.expression, "x", "y", InfixOperator::Plus);
+                } else {
+                    let s = format!("{:#?} is not an expression statement", stmt);
+                    panic!("{}", s);
+                }
+            } else {
+                panic!("{:#?} is not a function literal", es.expression);
             }
         } else {
             let s = format!("{:#?} is not an expression statement", stmt);
