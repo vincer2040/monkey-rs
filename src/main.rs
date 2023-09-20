@@ -1,7 +1,9 @@
-use ast::Node;
+use object::ObjectTrait;
 
 pub mod ast;
+pub mod evaluator;
 pub mod lexer;
+pub mod object;
 pub mod parser;
 pub mod token;
 pub mod util;
@@ -14,9 +16,12 @@ fn main() -> anyhow::Result<()> {
         let l: lexer::Lexer;
         let mut p: parser::Parser;
         let program: ast::Program;
-        let s: String;
+        let obj: Option<object::Object>;
         if line == "exit\n" {
             break;
+        }
+        if line == "\n" {
+            continue;
         }
         l = lexer::Lexer::new(&line);
         p = parser::Parser::new(l);
@@ -25,8 +30,14 @@ fn main() -> anyhow::Result<()> {
             print_errors(&p);
             continue;
         }
-        s = program.string();
-        println!("{}", s);
+        obj = evaluator::eval(&program);
+        match obj {
+            Some(o) => {
+                let val = o.inspect();
+                println!("{}", val);
+            }
+            None => {}
+        };
     }
     Ok(())
 }
