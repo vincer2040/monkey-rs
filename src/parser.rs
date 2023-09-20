@@ -2,6 +2,7 @@ use crate::ast::{
     BlockStatement, BooleanLiteral, CallExpression, Expression, ExpressionStatement,
     FunctionLiteral, Identifier, IfExpression, InfixExpression, InfixOperator, IntegerLiteral,
     LetStatement, PrefixExpression, PrefixOperator, Program, ReturnStatement, Statement,
+    StringLiteral,
 };
 use crate::lexer::Lexer;
 use crate::token::Token;
@@ -133,6 +134,7 @@ impl Parser {
         let mut left = match &self.cur {
             Token::Ident(_) => Some(self.parse_identifier()),
             Token::Int(_) => self.parse_integer_literal(),
+            Token::String(_) => Some(self.parse_string_literal()),
             Token::Bang | Token::Minus => self.parse_prefix_expression(),
             Token::True | Token::False => Some(self.parse_boolean_literal()),
             Token::LParen => self.parse_grouped_expression(),
@@ -204,6 +206,17 @@ impl Parser {
         let tok = self.cur.clone();
         let value = self.cur == Token::True;
         Expression::Boolean(BooleanLiteral { tok, value })
+    }
+
+    fn parse_string_literal(&mut self) -> Expression {
+        if let Token::String(s) = &self.cur {
+            Expression::String(StringLiteral {
+                tok: self.cur.clone(),
+                value: s.clone(),
+            })
+        } else {
+            panic!("unreachable");
+        }
     }
 
     fn parse_prefix_expression(&mut self) -> Option<Expression> {
@@ -1124,6 +1137,26 @@ mod test {
             } else {
                 let s = format!("{:#?} is not a call expressin", es.expression);
                 panic!("{}", s);
+            }
+        } else {
+            let s = format!("{:#?} is not an expression statement", stmt);
+            panic!("{}", s);
+        }
+    }
+
+    #[test]
+    fn test_string_literal_expression() {
+        let input = "\"hello world\"";
+        let l = Lexer::new(input);
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        assert_eq!(program.statements.len(), 1);
+        let stmt = &program.statements[0];
+        if let Statement::ExpressionStatement(es) = stmt {
+            if let Expression::String(s) = &es.expression {
+                assert_eq!(s.value.to_string(), "hello world".to_owned());
+            } else {
+                panic!("{:#?} is not a string", es.expression);
             }
         } else {
             let s = format!("{:#?} is not an expression statement", stmt);

@@ -46,6 +46,7 @@ pub struct ExpressionStatement {
 pub enum Expression {
     Identifier(Identifier),
     Integer(IntegerLiteral),
+    String(StringLiteral),
     Boolean(BooleanLiteral),
     PrefixExpression(PrefixExpression),
     InfixExpression(InfixExpression),
@@ -64,6 +65,12 @@ pub struct IntegerLiteral {
 pub struct BooleanLiteral {
     pub tok: Token,
     pub value: bool,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct StringLiteral {
+    pub tok: Token,
+    pub value: std::sync::Arc<str>,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -238,6 +245,19 @@ impl Node for BooleanLiteral {
     }
 }
 
+impl Node for StringLiteral {
+    fn token_literal(&self) -> String {
+        match &self.tok {
+            Token::String(s) => s.to_string(),
+            _ => panic!("unreachable in string token literal"),
+        }
+    }
+
+    fn string(&self) -> String {
+        self.value.to_string()
+    }
+}
+
 impl Node for PrefixExpression {
     fn token_literal(&self) -> String {
         todo!()
@@ -325,6 +345,7 @@ impl Node for Expression {
             Expression::Identifier(i) => i.string(),
             Expression::Integer(i) => i.string(),
             Expression::Boolean(b) => b.string(),
+            Expression::String(s) => s.string(),
             Expression::PrefixExpression(pe) => pe.string(),
             Expression::InfixExpression(ie) => ie.string(),
             Expression::IfExpression(ife) => ife.string(),
