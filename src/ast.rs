@@ -5,6 +5,7 @@ pub trait Node {
     fn string(&self) -> String;
 }
 
+#[derive(Debug)]
 pub struct Program {
     pub statements: Vec<Statement>,
 }

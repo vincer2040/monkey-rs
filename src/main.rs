@@ -33,6 +33,7 @@ fn main() -> anyhow::Result<()> {
             print_errors(&p);
             continue;
         }
+        // println!("{:#?}", program);
         obj = evaluator::eval(&program, &mut env);
         match obj {
             Some(o) => {
