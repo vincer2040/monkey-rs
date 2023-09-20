@@ -1,7 +1,7 @@
 use crate::ast::{
-    BlockStatement, BooleanLiteral, Expression, ExpressionStatement, FunctionLiteral, Identifier,
-    IfExpression, InfixExpression, InfixOperator, IntegerLiteral, LetStatement, PrefixExpression,
-    PrefixOperator, Program, ReturnStatement, Statement,
+    BlockStatement, BooleanLiteral, CallExpression, Expression, ExpressionStatement,
+    FunctionLiteral, Identifier, IfExpression, InfixExpression, InfixOperator, IntegerLiteral,
+    LetStatement, PrefixExpression, PrefixOperator, Program, ReturnStatement, Statement,
 };
 use crate::lexer::Lexer;
 use crate::token::Token;
@@ -145,11 +145,19 @@ impl Parser {
                 | Token::Lt
                 | Token::Gt => {
                     self.next_token();
-                    let l = match left {
+                    let l = match left.clone() {
                         Some(exp) => exp,
                         None => return None,
                     };
                     left = self.parse_infix_expression(l);
+                }
+                Token::LParen => {
+                    self.next_token();
+                    let l = match left.clone() {
+                        Some(exp) => exp,
+                        None => return None,
+                    };
+                    left = self.parse_call_expression(l);
                 }
                 _ => return left,
             }
@@ -350,6 +358,44 @@ impl Parser {
         Some(res)
     }
 
+    fn parse_call_expression(&mut self, func: Expression) -> Option<Expression> {
+        let tok = self.cur.clone();
+        let function = std::rc::Rc::new(func);
+        match self.parse_call_arguments() {
+            Some(arguments) => Some(Expression::CallExpression(CallExpression {
+                tok,
+                function,
+                arguments,
+            })),
+            None => None,
+        }
+    }
+
+    fn parse_call_arguments(&mut self) -> Option<Vec<Expression>> {
+        let mut res: Vec<Expression> = Vec::new();
+        if self.peek_token_is(&Token::RParen) {
+            self.next_token();
+            return Some(res);
+        }
+        self.next_token();
+        match self.parse_expression(Precedence::Lowest) {
+            Some(e) => res.push(e),
+            None => return None,
+        }
+        while self.peek_token_is(&Token::Comma) {
+            self.next_token();
+            self.next_token();
+            match self.parse_expression(Precedence::Lowest) {
+                Some(e) => res.push(e),
+                None => return None,
+            };
+        }
+        if !self.expect_peek(Token::RParen) {
+            return None;
+        }
+        Some(res)
+    }
+
     fn next_token(&mut self) {
         self.cur = self.peek.clone();
         self.peek = self.l.next_token();
@@ -391,6 +437,7 @@ impl Parser {
             Token::Minus => Precedence::Sum,
             Token::Asterisk => Precedence::Product,
             Token::Slash => Precedence::Product,
+            Token::LParen => Precedence::Call,
             _ => Precedence::Lowest,
         }
     }
@@ -405,6 +452,7 @@ impl Parser {
             Token::Minus => Precedence::Sum,
             Token::Asterisk => Precedence::Product,
             Token::Slash => Precedence::Product,
+            Token::LParen => Precedence::Call,
             _ => Precedence::Lowest,
         }
     }
@@ -503,6 +551,16 @@ mod test {
         if let Expression::InfixExpression(ie) = exp {
             test_ident(&ie.left, lname);
             test_ident(&ie.right, rname);
+            assert_eq!(ie.operator, oper);
+        } else {
+            panic!("{:#?} is not an infix expression", exp);
+        }
+    }
+
+    fn test_int_infix_exp(exp: &Expression, lval: i64, rval: i64, oper: InfixOperator) {
+        if let Expression::InfixExpression(ie) = exp {
+            test_integer_exp(&ie.left, lval);
+            test_integer_exp(&ie.right, rval);
             assert_eq!(ie.operator, oper);
         } else {
             panic!("{:#?} is not an infix expression", exp);
@@ -867,6 +925,18 @@ mod test {
                 input: "!(true == true)",
                 exp: "(!(true == true))",
             },
+            PrecedenceTest {
+                input: "a + add(b * c) + d",
+                exp: "((a + add((b * c))) + d)",
+            },
+            PrecedenceTest {
+                input: "add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))",
+                exp: "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))",
+            },
+            PrecedenceTest {
+                input: "add(a + b + c * d / f + g)",
+                exp: "add((((a + b) + ((c * d) / f)) + g))",
+            },
         ];
 
         for t in tests.iter() {
@@ -1006,6 +1076,35 @@ mod test {
                 }
             } else {
                 panic!("{:#?} is not a function literal", es.expression);
+            }
+        } else {
+            let s = format!("{:#?} is not an expression statement", stmt);
+            panic!("{}", s);
+        }
+    }
+
+    #[test]
+    fn test_call_expression() {
+        let input = "add(1, 2 * 3, 4 + 5);";
+        let l = Lexer::new(&input);
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        check_errors(&p);
+        assert_eq!(program.statements.len(), 1);
+        let stmt = &program.statements[0];
+        if let Statement::ExpressionStatement(es) = stmt {
+            if let Expression::CallExpression(call) = &es.expression {
+                test_ident(&call.function, "add");
+                assert_eq!(call.arguments.len(), 3);
+                let a1 = &call.arguments[0];
+                let a2 = &call.arguments[1];
+                let a3 = &call.arguments[2];
+                test_integer_exp(&a1, 1);
+                test_int_infix_exp(&a2, 2, 3, InfixOperator::Asterisk);
+                test_int_infix_exp(&a3, 4, 5, InfixOperator::Plus);
+            } else {
+                let s = format!("{:#?} is not a call expressin", es.expression);
+                panic!("{}", s);
             }
         } else {
             let s = format!("{:#?} is not an expression statement", stmt);

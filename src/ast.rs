@@ -9,37 +9,37 @@ pub struct Program {
     pub statements: Vec<Statement>,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Statement {
     LetStatement(LetStatement),
     ReturnStatement(ReturnStatement),
     ExpressionStatement(ExpressionStatement),
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct LetStatement {
     pub tok: Token, /* the Let token */
     pub name: Identifier,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Identifier {
     pub tok: Token, /* the Ident token */
     pub value: std::sync::Arc<str>,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct ReturnStatement {
     pub tok: Token, /* the Return token */
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct ExpressionStatement {
     pub tok: Token,
     pub expression: Expression,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Expression {
     Identifier(Identifier),
     Integer(IntegerLiteral),
@@ -48,34 +48,35 @@ pub enum Expression {
     InfixExpression(InfixExpression),
     IfExpression(IfExpression),
     FunctionLiteral(FunctionLiteral),
+    CallExpression(CallExpression),
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct IntegerLiteral {
     pub tok: Token,
     pub value: i64,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct BooleanLiteral {
     pub tok: Token,
     pub value: bool,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum PrefixOperator {
     Bang,
     Minus,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct PrefixExpression {
     pub tok: Token,
     pub operator: PrefixOperator,
     pub right: std::rc::Rc<Expression>,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum InfixOperator {
     Plus,
     Minus,
@@ -87,7 +88,7 @@ pub enum InfixOperator {
     NotEq,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct InfixExpression {
     pub tok: Token,
     pub left: std::rc::Rc<Expression>,
@@ -95,7 +96,7 @@ pub struct InfixExpression {
     pub right: std::rc::Rc<Expression>,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct IfExpression {
     pub tok: Token, /* the If token */
     pub condition: std::rc::Rc<Expression>,
@@ -103,17 +104,24 @@ pub struct IfExpression {
     pub alternative: Option<BlockStatement>,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct BlockStatement {
     pub tok: Token, /* the { token */
     pub statements: Vec<Statement>,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct FunctionLiteral {
     pub tok: Token, /* the Fn token */
     pub parameters: Vec<Identifier>,
     pub body: BlockStatement,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct CallExpression {
+    pub tok: Token, /* the LParen token */
+    pub function: std::rc::Rc<Expression>,
+    pub arguments: Vec<Expression>,
 }
 
 impl Node for Program {
@@ -316,6 +324,7 @@ impl Node for Expression {
             Expression::InfixExpression(ie) => ie.string(),
             Expression::IfExpression(ife) => ife.string(),
             Expression::FunctionLiteral(fne) => fne.string(),
+            Expression::CallExpression(call) => call.string(),
         }
     }
 }
@@ -337,6 +346,26 @@ impl Node for FunctionLiteral {
         }
         res.push_str(") ");
         res.push_str(&self.body.string());
+        res
+    }
+}
+
+impl Node for CallExpression {
+    fn token_literal(&self) -> String {
+        "(".to_owned()
+    }
+
+    fn string(&self) -> String {
+        let mut res = String::new();
+        res.push_str(&self.function.string());
+        res.push('(');
+        for (i, e) in self.arguments.iter().enumerate() {
+            res.push_str(&e.string());
+            if i != self.arguments.len() - 1 {
+                res.push_str(", ");
+            }
+        }
+        res.push(')');
         res
     }
 }
