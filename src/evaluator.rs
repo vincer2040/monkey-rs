@@ -70,6 +70,7 @@ fn eval_expression(e: &Expression, env: &mut Environment) -> Option<Object> {
     match e {
         Expression::Integer(val) => Some(Object::Integer(val.value)),
         Expression::Boolean(val) => Some(native_bool_to_bool_object(val.value)),
+        Expression::String(val) => Some(Object::String(val.value.clone())),
         Expression::Identifier(val) => match env.get(&val.value) {
             Some(v) => Some(v.clone()),
             None => Some(Object::Error(format!(
@@ -173,6 +174,17 @@ fn eval_infix_expression(left: &Object, right: &Object, operator: &InfixOperator
         InfixOperator::NotEq => return native_bool_to_bool_object(left != right),
         _ => {}
     };
+    if left.type_val() == ObjectType::String && right.type_val() == ObjectType::String {
+        let lval = match left {
+            Object::String(s) => s,
+            _ => unreachable!("lval should be a string"),
+        };
+        let rval = match right {
+            Object::String(s) => s,
+            _ => unreachable!("lval should be a string"),
+        };
+        return eval_string_infix_expression(lval, rval, &operator);
+    }
     match left {
         Object::Integer(val) => lval = *val,
         _ => {
@@ -209,6 +221,23 @@ fn eval_integer_infix_expression(lval: i64, rval: i64, operator: &InfixOperator)
         InfixOperator::Lt => native_bool_to_bool_object(lval < rval),
         InfixOperator::Gt => native_bool_to_bool_object(lval > rval),
     }
+}
+
+fn eval_string_infix_expression(
+    lval: &std::sync::Arc<str>,
+    rval: &std::sync::Arc<str>,
+    operator: &InfixOperator,
+) -> Object {
+    if *operator != InfixOperator::Plus {
+        return Object::Error(format!(
+            "unknown operator: {} {} {}",
+            "STRING",
+            operator.to_string(),
+            "STRING",
+        ));
+    }
+    let val = lval.to_string() + &rval.to_string();
+    Object::String(val.into())
 }
 
 fn eval_if_expression(ife: &IfExpression, env: &mut Environment) -> Option<Object> {
@@ -688,6 +717,10 @@ mod test {
                 input: "foobar",
                 exp: "identifier not found: foobar",
             },
+            ErrorTest {
+                input: "\"Hello\" - \"World\"",
+                exp: "unknown operator: STRING - STRING",
+            },
         ];
 
         for test in tests.iter() {
@@ -804,6 +837,36 @@ mod test {
         let obj_opt = test_eval(input);
         if let Some(obj) = obj_opt {
             test_int_object(&obj, 4);
+        } else {
+            panic!("evaluator returned None");
+        }
+    }
+
+    #[test]
+    fn test_strings() {
+        let input = "\"Hello World!\"";
+        let obj_opt = test_eval(input);
+        if let Some(obj) = obj_opt {
+            if let Object::String(s) = obj {
+                assert_eq!(s.to_string(), "Hello World!");
+            } else {
+                panic!("{:#?} is not a string", obj);
+            }
+        } else {
+            panic!("evaluator returned None");
+        }
+    }
+
+    #[test]
+    fn test_string_concatination() {
+        let input = "\"Hello\" + \" \" + \"World!\"";
+        let obj_opt = test_eval(input);
+        if let Some(obj) = obj_opt {
+            if let Object::String(s) = obj {
+                assert_eq!(s.to_string(), "Hello World!");
+            } else {
+                panic!("{:#?} is not a string", obj);
+            }
         } else {
             panic!("evaluator returned None");
         }

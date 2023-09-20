@@ -17,6 +17,7 @@ pub enum ObjectType {
     Return,
     Error,
     Function,
+    String,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -27,6 +28,7 @@ pub enum Object {
     Return(std::boxed::Box<Object>),
     Error(String),
     Function(Function),
+    String(std::sync::Arc<str>),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -42,6 +44,7 @@ impl ObjectTrait for Object {
             Self::Null => ObjectType::Null,
             Self::Integer(_) => ObjectType::Integer,
             Self::Boolean(_) => ObjectType::Boolean,
+            Self::String(_) => ObjectType::String,
             Self::Return(_) => ObjectType::Return,
             Self::Error(_) => ObjectType::Error,
             Self::Function(_) => ObjectType::Function,
@@ -52,6 +55,7 @@ impl ObjectTrait for Object {
             Self::Null => "NULL",
             Self::Integer(_) => "INTEGER",
             Self::Boolean(_) => "BOOLEAN",
+            Self::String(_) => "STRING",
             Self::Return(_) => "RETURN",
             Self::Error(_) => "ERROR",
             Self::Function(_) => "FUNCTION",
@@ -63,6 +67,7 @@ impl ObjectTrait for Object {
             Self::Null => "null".to_owned(),
             Self::Integer(val) => val.to_string(),
             Self::Boolean(val) => val.to_string(),
+            Self::String(val) => val.to_string(),
             Self::Return(val) => val.inspect(),
             Self::Error(val) => "ERROR: ".to_owned() + &val,
             Self::Function(val) => {
