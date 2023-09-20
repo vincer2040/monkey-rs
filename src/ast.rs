@@ -46,6 +46,7 @@ pub enum Expression {
     Boolean(BooleanLiteral),
     PrefixExpression(PrefixExpression),
     InfixExpression(InfixExpression),
+    IfExpression(IfExpression),
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -91,6 +92,20 @@ pub struct InfixExpression {
     pub left: std::rc::Rc<Expression>,
     pub operator: InfixOperator,
     pub right: std::rc::Rc<Expression>,
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub struct IfExpression {
+    pub tok: Token, /* the If token */
+    pub condition: std::rc::Rc<Expression>,
+    pub consequence: BlockStatement,
+    pub alternative: Option<BlockStatement>,
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub struct BlockStatement {
+    pub tok: Token, /* the { token */
+    pub statements: Vec<Statement>,
 }
 
 impl Node for Program {
@@ -245,6 +260,40 @@ impl Node for InfixExpression {
     }
 }
 
+impl Node for IfExpression {
+    fn token_literal(&self) -> String {
+        "if".to_owned()
+    }
+    fn string(&self) -> String {
+        let mut res = String::new();
+        res.push_str("if");
+        res.push_str(&self.condition.string());
+        res.push(' ');
+        res.push_str(&self.consequence.string());
+        match &self.alternative {
+            Some(alt) => {
+                res.push_str("else ");
+                res.push_str(&alt.string());
+            }
+            None => {}
+        };
+        res
+    }
+}
+
+impl Node for BlockStatement {
+    fn token_literal(&self) -> String {
+        "{".to_owned()
+    }
+    fn string(&self) -> String {
+        let mut res = String::new();
+        for stmt in self.statements.iter() {
+            res.push_str(&stmt.string())
+        }
+        res
+    }
+}
+
 impl Node for Expression {
     fn token_literal(&self) -> String {
         todo!()
@@ -257,6 +306,7 @@ impl Node for Expression {
             Expression::Boolean(b) => b.string(),
             Expression::PrefixExpression(pe) => pe.string(),
             Expression::InfixExpression(ie) => ie.string(),
+            Expression::IfExpression(ife) => ife.string(),
         }
     }
 }
