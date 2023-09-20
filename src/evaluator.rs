@@ -4,7 +4,7 @@ use crate::ast::{
     Expression, ExpressionStatement, IfExpression, InfixOperator, PrefixExpression, PrefixOperator,
     Program, Statement,
 };
-use crate::object::{Object, ObjectTrait};
+use crate::object::{Object, ObjectTrait, ObjectType};
 
 const TRUE: Object = Object::Boolean(true);
 const FALSE: Object = Object::Boolean(false);
@@ -39,6 +39,9 @@ fn eval_statement(statement: &Statement) -> Option<Object> {
                 Some(v) => v,
                 None => return None,
             };
+            if return_value.type_val() == ObjectType::Error {
+                return Some(return_value);
+            }
             Some(Object::Return(std::boxed::Box::new(return_value)))
         }
         Statement::ExpressionStatement(es) => eval_expression_statement(es),
@@ -59,6 +62,9 @@ fn eval_expression(e: &Expression) -> Option<Object> {
                 Some(val) => val,
                 None => return None,
             };
+            if let Object::Error(_) = right {
+                return Some(right);
+            }
             Some(eval_prefix_expression(&pe, &right))
         }
         Expression::InfixExpression(ie) => {
@@ -66,10 +72,16 @@ fn eval_expression(e: &Expression) -> Option<Object> {
                 Some(val) => val,
                 None => return None,
             };
+            if let Object::Error(_) = left {
+                return Some(left);
+            }
             let right = match eval_expression(&ie.right) {
                 Some(val) => val,
                 None => return None,
             };
+            if let Object::Error(_) = right {
+                return Some(right);
+            }
             Some(eval_infix_expression(&left, &right, &ie.operator))
         }
         Expression::IfExpression(ife) => eval_if_expression(&ife),
