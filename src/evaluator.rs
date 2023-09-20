@@ -80,6 +80,11 @@ fn eval_minus_operator(right: &Object) -> Object {
 }
 
 fn eval_infix_expression(left: &Object, right: &Object, operator: &InfixOperator) -> Object {
+    match operator {
+        InfixOperator::Eq => return native_bool_to_bool_object(left == right),
+        InfixOperator::NotEq => return native_bool_to_bool_object(left != right),
+        _ => {}
+    };
     let lval = match left {
         Object::Integer(val) => val,
         _ => return NULL,
@@ -97,7 +102,10 @@ fn eval_integer_infix_expression(lval: i64, rval: i64, operator: &InfixOperator)
         InfixOperator::Minus => Object::Integer(lval - rval),
         InfixOperator::Asterisk => Object::Integer(lval * rval),
         InfixOperator::Slash => Object::Integer(lval / rval),
-        _ => NULL,
+        InfixOperator::Eq => native_bool_to_bool_object(lval == rval),
+        InfixOperator::NotEq => native_bool_to_bool_object(lval != rval),
+        InfixOperator::Lt => native_bool_to_bool_object(lval < rval),
+        InfixOperator::Gt => native_bool_to_bool_object(lval > rval),
     }
 }
 
@@ -228,6 +236,74 @@ mod test {
             BoolTest {
                 input: "false",
                 exp: false,
+            },
+            BoolTest {
+                input: "1 < 2",
+                exp: true,
+            },
+            BoolTest {
+                input: "1 > 2",
+                exp: false,
+            },
+            BoolTest {
+                input: "1 < 1",
+                exp: false,
+            },
+            BoolTest {
+                input: "1 > 1",
+                exp: false,
+            },
+            BoolTest {
+                input: "1 == 1",
+                exp: true,
+            },
+            BoolTest {
+                input: "1 != 1",
+                exp: false,
+            },
+            BoolTest {
+                input: "1 == 2",
+                exp: false,
+            },
+            BoolTest {
+                input: "1 != 2",
+                exp: true,
+            },
+            BoolTest {
+                input: "true == true",
+                exp: true,
+            },
+            BoolTest {
+                input: "false == false",
+                exp: true,
+            },
+            BoolTest {
+                input: "true == false",
+                exp: false,
+            },
+            BoolTest {
+                input: "true != false",
+                exp: true,
+            },
+            BoolTest {
+                input: "false != true",
+                exp: true,
+            },
+            BoolTest {
+                input: "(1 < 2) == true",
+                exp: true,
+            },
+            BoolTest {
+                input: "(1 < 2) == false",
+                exp: false,
+            },
+            BoolTest {
+                input: "(1 > 2) == true",
+                exp: false,
+            },
+            BoolTest {
+                input: "(1 > 2) == false",
+                exp: true,
             },
         ];
 

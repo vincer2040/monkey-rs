@@ -3,7 +3,7 @@ pub trait ObjectTrait {
     fn inspect(&self) -> String;
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Object {
     Null,
     Integer(i64),
