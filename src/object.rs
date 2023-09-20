@@ -3,11 +3,12 @@ pub trait ObjectTrait {
     fn inspect(&self) -> String;
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Object {
     Null,
     Integer(i64),
     Boolean(bool),
+    Return(std::boxed::Box<Object>),
 }
 
 impl ObjectTrait for Object {
@@ -16,6 +17,7 @@ impl ObjectTrait for Object {
             Self::Null => "NULL",
             Self::Integer(_) => "INTEGER",
             Self::Boolean(_) => "BOOLEAN",
+            Self::Return(_) => "RETURN",
         }
     }
 
@@ -24,6 +26,7 @@ impl ObjectTrait for Object {
             Self::Null => "null".to_owned(),
             Self::Integer(val) => val.to_string(),
             Self::Boolean(val) => val.to_string(),
+            Self::Return(val) => val.inspect(),
         }
     }
 }

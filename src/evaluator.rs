@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use crate::ast::{
     Expression, ExpressionStatement, IfExpression, InfixOperator, PrefixExpression, PrefixOperator,
     Program, Statement,
@@ -16,12 +18,28 @@ fn eval_statements(statements: &Vec<Statement>) -> Option<Object> {
     let mut obj: Option<Object> = None;
     for stmt in statements {
         obj = eval_statement(stmt);
+        if let Some(o) = obj.clone() {
+            match o {
+                Object::Return(ret) => {
+                    let x = ret.deref().to_owned();
+                    return Some(x);
+                }
+                _ => {}
+            }
+        }
     }
     obj
 }
 
-fn eval_statement(statment: &Statement) -> Option<Object> {
-    match statment {
+fn eval_statement(statement: &Statement) -> Option<Object> {
+    match statement {
+        Statement::ReturnStatement(rs) => {
+            let return_value = match eval_expression(&rs.value) {
+                Some(v) => v,
+                None => return None,
+            };
+            Some(Object::Return(std::boxed::Box::new(return_value)))
+        }
         Statement::ExpressionStatement(es) => eval_expression_statement(es),
         _ => None,
     }
@@ -116,15 +134,31 @@ fn eval_if_expression(ife: &IfExpression) -> Option<Object> {
         None => return None,
     };
     if is_truthy(&cond) {
-        return eval_statements(&ife.consequence.statements);
+        return eval_block_statments(&ife.consequence.statements);
     } else {
         match &ife.alternative {
             Some(alt) => {
-                return eval_statements(&alt.statements);
+                return eval_block_statments(&alt.statements);
             }
             None => return Some(NULL),
         }
     }
+}
+
+fn eval_block_statments(statements: &Vec<Statement>) -> Option<Object> {
+    let mut obj: Option<Object> = None;
+    for stmt in statements {
+        obj = eval_statement(stmt);
+        if let Some(o) = obj.clone() {
+            match o {
+                Object::Return(_) => {
+                    return Some(o);
+                }
+                _ => {}
+            }
+        }
+    }
+    obj
 }
 
 fn native_bool_to_bool_object(input: bool) -> Object {
@@ -455,6 +489,16 @@ mod test {
             },
             IntTest {
                 input: "9; return 2 * 5; 9;",
+                exp: 10,
+            },
+            IntTest {
+                input: "
+                    if (10 > 1) {
+                        if (10 > 1) {
+                            return 10;
+                        }
+                        return 1;
+                    }",
                 exp: 10,
             },
         ];
