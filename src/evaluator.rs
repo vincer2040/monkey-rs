@@ -792,4 +792,20 @@ mod test {
             }
         }
     }
+
+    #[test]
+    fn test_closures() {
+        let input = "
+        let newAdder = fn(x) {
+            fn(y) { x + y };
+        };
+        let addTwo = newAdder(2);
+        addTwo(2);";
+        let obj_opt = test_eval(input);
+        if let Some(obj) = obj_opt {
+            test_int_object(&obj, 4);
+        } else {
+            panic!("evaluator returned None");
+        }
+    }
 }
