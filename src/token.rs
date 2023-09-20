@@ -4,6 +4,7 @@ pub enum Token {
     Eof,
     Ident(std::sync::Arc<str>),
     Int(std::sync::Arc<str>),
+    String(std::sync::Arc<str>),
     Assign,
     Plus,
     Minus,

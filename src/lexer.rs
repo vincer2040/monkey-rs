@@ -22,6 +22,10 @@ impl Lexer {
         let tok: Token;
         self.skip_whitespace();
         match self.ch {
+            '"' => {
+                let str = self.read_string();
+                tok = Token::String(str.into());
+            }
             '=' => {
                 if self.peek_char() == '=' {
                     tok = Token::Eq;
@@ -98,6 +102,19 @@ impl Lexer {
         res
     }
 
+    fn read_string(&mut self) -> String {
+        let mut res = String::new();
+        self.read_char();
+        loop {
+            if self.ch == '"' || self.ch == '\0' {
+                break;
+            }
+            res.push(self.ch);
+            self.read_char();
+        }
+        res
+    }
+
     fn skip_whitespace(&mut self) {
         while self.ch == ' ' || self.ch == '\t' || self.ch == '\n' || self.ch == '\r' {
             self.read_char();
@@ -139,6 +156,8 @@ if (5 < 10) {
 }
 10 == 10;
 10 != 9;
+\"foobar\"
+\"foo bar\"
 ";
         let mut l = Lexer::new(&input);
         let exps = vec![
@@ -215,6 +234,8 @@ if (5 < 10) {
             Token::NotEq,
             Token::Int("9".into()),
             Token::Semicolon,
+            Token::String("foobar".into()),
+            Token::String("foo bar".into()),
             Token::Eof,
         ];
         for exp in exps.iter() {
