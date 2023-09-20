@@ -1,3 +1,4 @@
+use environment::Environment;
 use object::ObjectTrait;
 
 pub mod ast;
@@ -7,10 +8,12 @@ pub mod object;
 pub mod parser;
 pub mod token;
 pub mod util;
+pub mod environment;
 
 const PROMP: &'static str = ">> ";
 
 fn main() -> anyhow::Result<()> {
+    let mut env = Environment::new();
     loop {
         let line = util::read_line(PROMP)?;
         let l: lexer::Lexer;
@@ -30,7 +33,7 @@ fn main() -> anyhow::Result<()> {
             print_errors(&p);
             continue;
         }
-        obj = evaluator::eval(&program);
+        obj = evaluator::eval(&program, &mut env);
         match obj {
             Some(o) => {
                 let val = o.inspect();

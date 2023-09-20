@@ -4,20 +4,21 @@ use crate::ast::{
     Expression, ExpressionStatement, IfExpression, InfixOperator, PrefixExpression, PrefixOperator,
     Program, Statement,
 };
+use crate::environment::Environment;
 use crate::object::{Object, ObjectTrait, ObjectType};
 
 const TRUE: Object = Object::Boolean(true);
 const FALSE: Object = Object::Boolean(false);
 const NULL: Object = Object::Null;
 
-pub fn eval(program: &Program) -> Option<Object> {
-    eval_statements(&program.statements)
+pub fn eval(program: &Program, env: &mut Environment) -> Option<Object> {
+    eval_statements(&program.statements, env)
 }
 
-fn eval_statements(statements: &Vec<Statement>) -> Option<Object> {
+fn eval_statements(statements: &Vec<Statement>, env: &mut Environment) -> Option<Object> {
     let mut obj: Option<Object> = None;
     for stmt in statements {
-        obj = eval_statement(stmt);
+        obj = eval_statement(stmt, env);
         if let Some(o) = obj.clone() {
             match o {
                 Object::Return(ret) => {
@@ -32,10 +33,23 @@ fn eval_statements(statements: &Vec<Statement>) -> Option<Object> {
     obj
 }
 
-fn eval_statement(statement: &Statement) -> Option<Object> {
+fn eval_statement(statement: &Statement, env: &mut Environment) -> Option<Object> {
     match statement {
+        Statement::LetStatement(ls) => {
+            let val = eval_expression(&ls.value, env);
+            if let Some(exp) = val.clone() {
+                if exp.type_val() == ObjectType::Error {
+                    return val;
+                } else {
+                    env.set(ls.name.value.clone(), exp);
+                    return None;
+                }
+            } else {
+                return None;
+            }
+        }
         Statement::ReturnStatement(rs) => {
-            let return_value = match eval_expression(&rs.value) {
+            let return_value = match eval_expression(&rs.value, env) {
                 Some(v) => v,
                 None => return None,
             };
@@ -44,21 +58,27 @@ fn eval_statement(statement: &Statement) -> Option<Object> {
             }
             Some(Object::Return(std::boxed::Box::new(return_value)))
         }
-        Statement::ExpressionStatement(es) => eval_expression_statement(es),
-        _ => None,
+        Statement::ExpressionStatement(es) => eval_expression_statement(es, env),
     }
 }
 
-fn eval_expression_statement(es: &ExpressionStatement) -> Option<Object> {
-    eval_expression(&es.expression)
+fn eval_expression_statement(es: &ExpressionStatement, env: &mut Environment) -> Option<Object> {
+    eval_expression(&es.expression, env)
 }
 
-fn eval_expression(e: &Expression) -> Option<Object> {
+fn eval_expression(e: &Expression, env: &mut Environment) -> Option<Object> {
     match e {
         Expression::Integer(val) => Some(Object::Integer(val.value)),
         Expression::Boolean(val) => Some(native_bool_to_bool_object(val.value)),
+        Expression::Identifier(val) => match env.get(val.value.clone()) {
+            Some(v) => Some(v.clone()),
+            None => Some(Object::Error(format!(
+                "identifier not found: {}",
+                val.value
+            ))),
+        },
         Expression::PrefixExpression(pe) => {
-            let right = match eval_expression(&pe.right) {
+            let right = match eval_expression(&pe.right, env) {
                 Some(val) => val,
                 None => return None,
             };
@@ -68,14 +88,14 @@ fn eval_expression(e: &Expression) -> Option<Object> {
             Some(eval_prefix_expression(&pe, &right))
         }
         Expression::InfixExpression(ie) => {
-            let left = match eval_expression(&ie.left) {
+            let left = match eval_expression(&ie.left, env) {
                 Some(val) => val,
                 None => return None,
             };
             if let Object::Error(_) = left {
                 return Some(left);
             }
-            let right = match eval_expression(&ie.right) {
+            let right = match eval_expression(&ie.right, env) {
                 Some(val) => val,
                 None => return None,
             };
@@ -84,7 +104,7 @@ fn eval_expression(e: &Expression) -> Option<Object> {
             }
             Some(eval_infix_expression(&left, &right, &ie.operator))
         }
-        Expression::IfExpression(ife) => eval_if_expression(&ife),
+        Expression::IfExpression(ife) => eval_if_expression(&ife, env),
         _ => None,
     }
 }
@@ -165,27 +185,27 @@ fn eval_integer_infix_expression(lval: i64, rval: i64, operator: &InfixOperator)
     }
 }
 
-fn eval_if_expression(ife: &IfExpression) -> Option<Object> {
-    let cond = match eval_expression(&ife.condition) {
+fn eval_if_expression(ife: &IfExpression, env: &mut Environment) -> Option<Object> {
+    let cond = match eval_expression(&ife.condition, env) {
         Some(v) => v,
         None => return None,
     };
     if is_truthy(&cond) {
-        return eval_block_statments(&ife.consequence.statements);
+        return eval_block_statments(&ife.consequence.statements, env);
     } else {
         match &ife.alternative {
             Some(alt) => {
-                return eval_block_statments(&alt.statements);
+                return eval_block_statments(&alt.statements, env);
             }
             None => return Some(NULL),
         }
     }
 }
 
-fn eval_block_statments(statements: &Vec<Statement>) -> Option<Object> {
+fn eval_block_statments(statements: &Vec<Statement>, env: &mut Environment) -> Option<Object> {
     let mut obj: Option<Object> = None;
     for stmt in statements {
-        obj = eval_statement(stmt);
+        obj = eval_statement(stmt, env);
         if let Some(o) = obj.clone() {
             match o {
                 Object::Return(_) => return Some(o),
@@ -215,7 +235,9 @@ fn is_truthy(obj: &Object) -> bool {
 
 #[cfg(test)]
 mod test {
-    use crate::{evaluator::eval, lexer::Lexer, object::Object, parser::Parser};
+    use crate::{
+        environment::Environment, evaluator::eval, lexer::Lexer, object::Object, parser::Parser,
+    };
 
     struct IntTest {
         input: &'static str,
@@ -238,10 +260,11 @@ mod test {
     }
 
     fn test_eval(input: &str) -> Option<Object> {
+        let mut env = Environment::new();
         let l = Lexer::new(input);
         let mut p = Parser::new(l);
         let program = p.parse();
-        eval(&program)
+        eval(&program, &mut env)
     }
 
     fn test_int_object(obj: &Object, exp: i64) {
@@ -590,6 +613,10 @@ mod test {
                 }",
                 exp: "unknown operator: BOOLEAN + BOOLEAN",
             },
+            ErrorTest {
+                input: "foobar",
+                exp: "identifier not found: foobar",
+            },
         ];
 
         for test in tests.iter() {
@@ -600,6 +627,37 @@ mod test {
                     _ => panic!("{:#?} is not an error object", v),
                 },
                 None => panic!("eval returned none"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_let_statements() {
+        let tests = vec![
+            IntTest {
+                input: "let a = 5; a;",
+                exp: 5,
+            },
+            IntTest {
+                input: "let a = 5 * 5; a;",
+                exp: 25,
+            },
+            IntTest {
+                input: "let a = 5; let b = a; b;",
+                exp: 5,
+            },
+            IntTest {
+                input: "let a = 5; let b = a; let c = a + b + 5; c;",
+                exp: 15,
+            },
+        ];
+
+        for test in tests.iter() {
+            let obj_opt = test_eval(test.input);
+            if let Some(obj) = obj_opt {
+                test_int_object(&obj, test.exp);
+            } else {
+                panic!("evaluator returned None");
             }
         }
     }
