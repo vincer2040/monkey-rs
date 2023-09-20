@@ -1,5 +1,6 @@
 use crate::ast::{
-    Expression, ExpressionStatement, PrefixExpression, PrefixOperator, Program, Statement,
+    Expression, ExpressionStatement, InfixOperator, PrefixExpression, PrefixOperator, Program,
+    Statement,
 };
 use crate::object::Object;
 
@@ -41,6 +42,17 @@ fn eval_expression(e: &Expression) -> Option<Object> {
             };
             eval_prefix_expression(&pe, &right)
         }
+        Expression::InfixExpression(ie) => {
+            let left = match eval_expression(&ie.left) {
+                Some(val) => val,
+                None => return None,
+            };
+            let right = match eval_expression(&ie.right) {
+                Some(val) => val,
+                None => return None,
+            };
+            Some(eval_infix_expression(&left, &right, &ie.operator))
+        }
         _ => None,
     }
 }
@@ -63,6 +75,28 @@ fn eval_bang_operator(right: &Object) -> Object {
 fn eval_minus_operator(right: &Object) -> Object {
     match right {
         Object::Integer(v) => Object::Integer(-v),
+        _ => NULL,
+    }
+}
+
+fn eval_infix_expression(left: &Object, right: &Object, operator: &InfixOperator) -> Object {
+    let lval = match left {
+        Object::Integer(val) => val,
+        _ => return NULL,
+    };
+    let rval = match right {
+        Object::Integer(val) => val,
+        _ => return NULL,
+    };
+    eval_integer_infix_expression(*lval, *rval, operator)
+}
+
+fn eval_integer_infix_expression(lval: i64, rval: i64, operator: &InfixOperator) -> Object {
+    match operator {
+        InfixOperator::Plus => Object::Integer(lval + rval),
+        InfixOperator::Minus => Object::Integer(lval - rval),
+        InfixOperator::Asterisk => Object::Integer(lval * rval),
+        InfixOperator::Slash => Object::Integer(lval / rval),
         _ => NULL,
     }
 }
@@ -127,6 +161,50 @@ mod test {
             IntTest {
                 input: "-10",
                 exp: -10,
+            },
+            IntTest {
+                input: "5 + 5 + 5 + 5 - 10",
+                exp: 10,
+            },
+            IntTest {
+                input: "2 * 2 * 2 * 2 * 2",
+                exp: 32,
+            },
+            IntTest {
+                input: "-50 + 100 + -50",
+                exp: 0,
+            },
+            IntTest {
+                input: "5 * 2 + 10",
+                exp: 20,
+            },
+            IntTest {
+                input: "5 + 2 * 10",
+                exp: 25,
+            },
+            IntTest {
+                input: "20 + 2 * -10",
+                exp: 0,
+            },
+            IntTest {
+                input: "50 / 2 * 2 + 10",
+                exp: 60,
+            },
+            IntTest {
+                input: "2 * (5 + 10)",
+                exp: 30,
+            },
+            IntTest {
+                input: "3 * 3 * 3 + 10",
+                exp: 37,
+            },
+            IntTest {
+                input: "3 * (3 * 3) + 10",
+                exp: 37,
+            },
+            IntTest {
+                input: "(5 + 10 * 2 + 15 / 3) * 2 + -10",
+                exp: 50,
             },
         ];
 
