@@ -1,6 +1,6 @@
 use crate::ast::{
-    Expression, ExpressionStatement, InfixOperator, PrefixExpression, PrefixOperator, Program,
-    Statement,
+    Expression, ExpressionStatement, IfExpression, InfixOperator, PrefixExpression, PrefixOperator,
+    Program, Statement,
 };
 use crate::object::Object;
 
@@ -40,7 +40,7 @@ fn eval_expression(e: &Expression) -> Option<Object> {
                 Some(val) => val,
                 None => return None,
             };
-            eval_prefix_expression(&pe, &right)
+            Some(eval_prefix_expression(&pe, &right))
         }
         Expression::InfixExpression(ie) => {
             let left = match eval_expression(&ie.left) {
@@ -53,14 +53,15 @@ fn eval_expression(e: &Expression) -> Option<Object> {
             };
             Some(eval_infix_expression(&left, &right, &ie.operator))
         }
+        Expression::IfExpression(ife) => eval_if_expression(&ife),
         _ => None,
     }
 }
 
-fn eval_prefix_expression(pe: &PrefixExpression, right: &Object) -> Option<Object> {
+fn eval_prefix_expression(pe: &PrefixExpression, right: &Object) -> Object {
     match pe.operator {
-        PrefixOperator::Bang => Some(eval_bang_operator(right)),
-        PrefixOperator::Minus => Some(eval_minus_operator(right)),
+        PrefixOperator::Bang => eval_bang_operator(right),
+        PrefixOperator::Minus => eval_minus_operator(right),
     }
 }
 
@@ -109,11 +110,36 @@ fn eval_integer_infix_expression(lval: i64, rval: i64, operator: &InfixOperator)
     }
 }
 
+fn eval_if_expression(ife: &IfExpression) -> Option<Object> {
+    let cond = match eval_expression(&ife.condition) {
+        Some(v) => v,
+        None => return None,
+    };
+    if is_truthy(&cond) {
+        return eval_statements(&ife.consequence.statements);
+    } else {
+        match &ife.alternative {
+            Some(alt) => {
+                return eval_statements(&alt.statements);
+            }
+            None => return Some(NULL),
+        }
+    }
+}
+
 fn native_bool_to_bool_object(input: bool) -> Object {
     if input {
         TRUE
     } else {
         FALSE
+    }
+}
+
+fn is_truthy(obj: &Object) -> bool {
+    match obj {
+        Object::Null => false,
+        Object::Boolean(v) => *v,
+        _ => true,
     }
 }
 
@@ -129,6 +155,11 @@ mod test {
     struct BoolTest {
         input: &'static str,
         exp: bool,
+    }
+
+    struct IfElseTest {
+        input: &'static str,
+        exp: Option<i64>,
     }
 
     fn test_eval(input: &str) -> Option<Object> {
@@ -152,6 +183,10 @@ mod test {
         } else {
             panic!("{:#?} is not a boolean object", obj);
         }
+    }
+
+    fn test_null_object(obj: &Object) {
+        assert_eq!(*obj, Object::Null);
     }
 
     #[test]
@@ -350,6 +385,84 @@ mod test {
             let obj_opt = test_eval(test.input);
             if let Some(obj) = obj_opt {
                 test_bool_object(&obj, test.exp);
+            } else {
+                panic!("evaluator returned None");
+            }
+        }
+    }
+
+    #[test]
+    fn test_if_else_expressions() {
+        let tests = vec![
+            IfElseTest {
+                input: "if (true) { 10 }",
+                exp: Some(10),
+            },
+            IfElseTest {
+                input: "if (false) { 10 }",
+                exp: None,
+            },
+            IfElseTest {
+                input: "if (1) { 10 }",
+                exp: Some(10),
+            },
+            IfElseTest {
+                input: "if (1 < 2) { 10 }",
+                exp: Some(10),
+            },
+            IfElseTest {
+                input: "if (1 > 2) { 10 }",
+                exp: None,
+            },
+            IfElseTest {
+                input: "if (1 > 2) { 10 } else { 20 }",
+                exp: Some(20),
+            },
+            IfElseTest {
+                input: "if (1 < 2) { 10 } else { 20 }",
+                exp: Some(10),
+            },
+        ];
+
+        for test in tests.iter() {
+            let obj_opt = test_eval(test.input);
+            if let Some(obj) = obj_opt {
+                if let Some(tval) = test.exp {
+                    test_int_object(&obj, tval);
+                } else {
+                    test_null_object(&obj);
+                }
+            } else {
+                panic!("eval returned None");
+            }
+        }
+    }
+
+    #[test]
+    fn test_return_statements() {
+        let tests = vec![
+            IntTest {
+                input: "return 10;",
+                exp: 10,
+            },
+            IntTest {
+                input: "return 10; 9;",
+                exp: 10,
+            },
+            IntTest {
+                input: "return 2 * 5; 9;",
+                exp: 10,
+            },
+            IntTest {
+                input: "9; return 2 * 5; 9;",
+                exp: 10,
+            },
+        ];
+
+        for test in tests.iter() {
+            let obj_opt = test_eval(test.input);
+            if let Some(obj) = obj_opt {
+                test_int_object(&obj, test.exp);
             } else {
                 panic!("evaluator returned None");
             }
