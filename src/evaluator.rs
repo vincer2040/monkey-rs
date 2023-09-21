@@ -6,7 +6,7 @@ use crate::ast::{
 };
 use crate::builtins::len;
 use crate::environment::Environment;
-use crate::object::{Builtin, Function, Object, ObjectTrait, ObjectType};
+use crate::object::{Array, Builtin, Function, Object, ObjectTrait, ObjectType};
 
 const TRUE: Object = Object::Boolean(true);
 const FALSE: Object = Object::Boolean(false);
@@ -124,7 +124,30 @@ fn eval_expression(e: &Expression, env: &mut Environment) -> Option<Object> {
                 None => return None,
             }
         }
-        _ => None,
+        Expression::Array(arr) => {
+            let elements = eval_expressions(&arr.elements, env);
+            if elements.len() == 1 && elements[0].type_val() == ObjectType::Error {
+                return Some(elements[0].clone());
+            }
+            Some(Object::Array(Array { elements }))
+        }
+        Expression::IndexExpression(idx) => {
+            let left = match eval_expression(&idx.left, env) {
+                Some(l) => l,
+                None => return None,
+            };
+            if left.type_val() == ObjectType::Error {
+                return Some(left);
+            }
+            let index = match eval_expression(&idx.index, env) {
+                Some(l) => l,
+                None => return None,
+            };
+            if index.type_val() == ObjectType::Error {
+                return Some(index);
+            }
+            Some(eval_index_expression(&left, &index))
+        }
     }
 }
 
@@ -315,6 +338,33 @@ fn apply_function(func_obj: &Object, args: &Vec<Object>) -> Option<Object> {
     }
 }
 
+fn eval_index_expression(left: &Object, index: &Object) -> Object {
+    if left.type_val() == ObjectType::Array && index.type_val() == ObjectType::Integer {
+        return eval_array_index_expression(left, index);
+    }
+    Object::Error(format!(
+        "index operator not supported: {}",
+        left.type_string()
+    ))
+}
+
+fn eval_array_index_expression(left: &Object, index: &Object) -> Object {
+    let arr = match left {
+        Object::Array(a) => a,
+        _ => unreachable!("not an array left in eval_array_index_expression"),
+    };
+    let idx = match index {
+        Object::Integer(i) => i,
+        _ => unreachable!("not an integer index in eval_array_index_expression"),
+    };
+
+    if *idx < 0 || *idx as usize >= arr.elements.len() {
+        return NULL;
+    }
+
+    return arr.elements[*idx as usize].clone();
+}
+
 fn extend_function_env(func: &Function, args: &Vec<Object>) -> Environment {
     let mut env = Environment::new_enclosed_env(&func.env);
 
@@ -374,6 +424,11 @@ mod test {
     struct ErrorTest {
         input: &'static str,
         exp: &'static str,
+    }
+
+    struct IndexTest {
+        input: &'static str,
+        exp: Option<i64>,
     }
 
     fn test_eval(input: &str) -> Option<Object> {
@@ -920,6 +975,82 @@ mod test {
                 test_int_object(&obj, test.exp);
             } else {
                 panic!("evaluator returned None");
+            }
+        }
+    }
+
+    #[test]
+    fn test_array_literals() {
+        let input = "[1, 2 * 2, 3 + 3]";
+        let obj_opt = test_eval(input);
+        if let Some(obj) = obj_opt {
+            if let Object::Array(a) = obj {
+                test_int_object(&a.elements[0], 1);
+                test_int_object(&a.elements[1], 4);
+                test_int_object(&a.elements[2], 6);
+            } else {
+                panic!("{:#?} is not an array obj", obj);
+            }
+        } else {
+            panic!("evaluator returned None");
+        }
+    }
+
+    #[test]
+    fn test_array_index_expression() {
+        let tests = vec![
+            IndexTest {
+                input: "[1, 2, 3][0]",
+                exp: Some(1),
+            },
+            IndexTest {
+                input: "[1, 2, 3][1]",
+                exp: Some(2),
+            },
+            IndexTest {
+                input: "[1, 2, 3][2]",
+                exp: Some(3),
+            },
+            IndexTest {
+                input: "let i = 0; [1][i];",
+                exp: Some(1),
+            },
+            IndexTest {
+                input: "[1, 2, 3][1 + 1];",
+                exp: Some(3),
+            },
+            IndexTest {
+                input: "let myArray = [1, 2, 3]; myArray[2];",
+                exp: Some(3),
+            },
+            IndexTest {
+                input: "let myArray = [1, 2, 3]; myArray[0] + myArray[1] + myArray[2];",
+                exp: Some(6),
+            },
+            IndexTest {
+                input: "let myArray = [1, 2, 3]; let i = myArray[0]; myArray[i]",
+                exp: Some(2),
+            },
+            IndexTest {
+                input: "[1, 2, 3][3]",
+                exp: None,
+            },
+            IndexTest {
+                input: "[1, 2, 3][-1]",
+                exp: None,
+            },
+        ];
+
+        for test in tests.iter() {
+            let obj_opt = test_eval(test.input);
+            if let Some(obj) = obj_opt {
+                if let Some(tval) = test.exp {
+                    test_int_object(&obj, tval);
+                } else {
+                    test_null_object(&obj);
+                }
+            } else {
+                panic!("eval returned None");
             }
         }
     }

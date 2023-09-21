@@ -11,6 +11,11 @@ pub trait ObjectTrait {
 
 type BuiltinFunction = fn(args: &Vec<Object>) -> Object;
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Array {
+    pub elements: Vec<Object>,
+}
+
 #[derive(PartialEq, Eq)]
 pub enum ObjectType {
     Null,
@@ -21,6 +26,7 @@ pub enum ObjectType {
     Function,
     String,
     Builtin,
+    Array,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -33,6 +39,7 @@ pub enum Object {
     Function(Function),
     String(std::sync::Arc<str>),
     Builtin(Builtin),
+    Array(Array),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -58,6 +65,7 @@ impl ObjectTrait for Object {
             Self::Error(_) => ObjectType::Error,
             Self::Function(_) => ObjectType::Function,
             Self::Builtin(_) => ObjectType::Builtin,
+            Self::Array(_) => ObjectType::Array,
         }
     }
     fn type_string(&self) -> &'static str {
@@ -70,6 +78,7 @@ impl ObjectTrait for Object {
             Self::Error(_) => "ERROR",
             Self::Function(_) => "FUNCTION",
             Self::Builtin(_) => "BUILTIN",
+            Self::Array(_) => "ARRAY",
         }
     }
 
@@ -97,6 +106,18 @@ impl ObjectTrait for Object {
                 res
             }
             Self::Builtin(_) => "builtin function".to_owned(),
+            Self::Array(val) => {
+                let mut res = String::new();
+                res.push('[');
+                for (i, el) in val.elements.iter().enumerate() {
+                    res.push_str(&el.inspect());
+                    if i != val.elements.len() - 1 {
+                        res.push_str(", ");
+                    }
+                }
+                res.push(']');
+                res
+            }
         }
     }
 }
