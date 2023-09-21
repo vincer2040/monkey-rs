@@ -38,5 +38,5 @@ $ make run
 4. run the tests
 
 ```console
-make test
+$ make test
 ```
