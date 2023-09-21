@@ -119,3 +119,10 @@ pub fn push(args: &Vec<Object>) -> Object {
         )),
     }
 }
+
+pub fn print(args: &Vec<Object>) -> Object {
+    for arg in args.iter() {
+        println!("{}", arg.inspect());
+    }
+    return evaluator::NULL;
+}

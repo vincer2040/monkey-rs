@@ -4,7 +4,7 @@ use crate::ast::{
     Expression, ExpressionStatement, HashLiteral, IfExpression, InfixOperator, PrefixExpression,
     PrefixOperator, Program, Statement,
 };
-use crate::builtins::{first, last, len, push, rest};
+use crate::builtins::{first, last, len, print, push, rest};
 use crate::environment::Environment;
 use crate::object::{Array, Builtin, Function, Hash, Object, ObjectTrait, ObjectType};
 
@@ -17,6 +17,7 @@ const FIRST: Object = Object::Builtin(Builtin { func: first });
 const LAST: Object = Object::Builtin(Builtin { func: last });
 const REST: Object = Object::Builtin(Builtin { func: rest });
 const PUSH: Object = Object::Builtin(Builtin { func: push });
+const PRINT: Object = Object::Builtin(Builtin { func: print });
 
 pub fn eval(program: &Program, env: &mut Environment) -> Option<Object> {
     eval_statements(&program.statements, env)
@@ -311,6 +312,9 @@ fn eval_identifier(name: &std::sync::Arc<str>, env: &Environment) -> Object {
             }
             if s == "push".to_owned() {
                 return PUSH;
+            }
+            if s == "print".to_owned() {
+                return PRINT;
             }
             Object::Error(format!("identifier not found: {}", name))
         }
