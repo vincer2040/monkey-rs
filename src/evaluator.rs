@@ -357,8 +357,12 @@ fn apply_function(func_obj: &Object, args: &Vec<Object>) -> Option<Object> {
 }
 
 fn eval_index_expression(left: &Object, index: &Object) -> Object {
-    if left.type_val() == ObjectType::Array && index.type_val() == ObjectType::Integer {
+    let lt = left.type_val();
+    if lt == ObjectType::Array && index.type_val() == ObjectType::Integer {
         return eval_array_index_expression(left, index);
+    }
+    if lt == ObjectType::Hash {
+        return eval_hash_index_expression(left, index);
     }
     Object::Error(format!(
         "index operator not supported: {}",
@@ -381,6 +385,18 @@ fn eval_array_index_expression(left: &Object, index: &Object) -> Object {
     }
 
     return arr.elements[*idx as usize].clone();
+}
+
+fn eval_hash_index_expression(left: &Object, index: &Object) -> Object {
+    let hash = match left {
+        Object::Hash(h) => h,
+        _ => unreachable!("not a hash left in eval_hash_index_expression"),
+    };
+    let val = hash.pairs.iter().find(|x| x.0 == *index);
+    match val {
+        Some(v) => v.1.clone(),
+        None => NULL,
+    }
 }
 
 fn eval_hash_literal(hash: &HashLiteral, env: &mut Environment) -> Option<Object> {
@@ -1144,6 +1160,53 @@ mod test {
             }
         } else {
             panic!("eval returned None");
+        }
+    }
+
+    #[test]
+    fn test_hash_index_expression() {
+        let tests = vec![
+            IndexTest {
+                input: "{\"foo\": 5 }[\"foo\"]",
+                exp: Some(5),
+            },
+            IndexTest {
+                input: "{\"foo\": 5 }[\"bar\"]",
+                exp: None,
+            },
+            IndexTest {
+                input: "let key = \"foo\"; {\"foo\": 5 }[key]",
+                exp: Some(5),
+            },
+            IndexTest {
+                input: "{}[\"foo\"]",
+                exp: None,
+            },
+            IndexTest {
+                input: "{5: 5}[5]",
+                exp: Some(5),
+            },
+            IndexTest {
+                input: "{true: 5}[true]",
+                exp: Some(5),
+            },
+            IndexTest {
+                input: "{false: 5}[false]",
+                exp: Some(5),
+            },
+        ];
+
+        for test in tests.iter() {
+            let obj_opt = test_eval(test.input);
+            if let Some(obj) = obj_opt {
+                if let Some(tval) = test.exp {
+                    test_int_object(&obj, tval);
+                } else {
+                    test_null_object(&obj);
+                }
+            } else {
+                panic!("eval returned None");
+            }
         }
     }
 }
