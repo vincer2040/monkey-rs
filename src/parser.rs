@@ -1,8 +1,8 @@
 use crate::ast::{
     ArrayLiteral, BlockStatement, BooleanLiteral, CallExpression, Expression, ExpressionStatement,
-    FunctionLiteral, Identifier, IfExpression, InfixExpression, InfixOperator, IntegerLiteral,
-    LetStatement, PrefixExpression, PrefixOperator, Program, ReturnStatement, Statement,
-    StringLiteral,
+    FunctionLiteral, Identifier, IfExpression, IndexExpression, InfixExpression, InfixOperator,
+    IntegerLiteral, LetStatement, PrefixExpression, PrefixOperator, Program, ReturnStatement,
+    Statement, StringLiteral,
 };
 use crate::lexer::Lexer;
 use crate::token::Token;
@@ -23,6 +23,7 @@ enum Precedence {
     Product = 4,
     Prefix = 5,
     Call = 6,
+    Index = 7,
 }
 
 impl Parser {
@@ -179,6 +180,14 @@ impl Parser {
                         None => return None,
                     };
                     left = self.parse_call_expression(l);
+                }
+                Token::LBracket => {
+                    self.next_token();
+                    let l = match left.clone() {
+                        Some(exp) => exp,
+                        None => return None,
+                    };
+                    left = self.parse_index_expression(l);
                 }
                 _ => return left,
             }
@@ -428,6 +437,26 @@ impl Parser {
         Some(res)
     }
 
+    fn parse_index_expression(&mut self, left_exp: Expression) -> Option<Expression> {
+        let tok = self.cur.clone();
+        let left = std::rc::Rc::new(left_exp);
+        self.next_token();
+        match self.parse_expression(Precedence::Lowest) {
+            Some(e) => {
+                let index = std::rc::Rc::new(e);
+                if !self.expect_peek(Token::RBracket) {
+                    return None;
+                }
+                Some(Expression::IndexExpression(IndexExpression {
+                    tok,
+                    left,
+                    index,
+                }))
+            }
+            None => None,
+        }
+    }
+
     fn next_token(&mut self) {
         self.cur = self.peek.clone();
         self.peek = self.l.next_token();
@@ -470,6 +499,7 @@ impl Parser {
             Token::Asterisk => Precedence::Product,
             Token::Slash => Precedence::Product,
             Token::LParen => Precedence::Call,
+            Token::LBracket => Precedence::Index,
             _ => Precedence::Lowest,
         }
     }
@@ -485,6 +515,7 @@ impl Parser {
             Token::Asterisk => Precedence::Product,
             Token::Slash => Precedence::Product,
             Token::LParen => Precedence::Call,
+            Token::LBracket => Precedence::Index,
             _ => Precedence::Lowest,
         }
     }
@@ -977,6 +1008,14 @@ mod test {
                 input: "add(a + b + c * d / f + g)",
                 exp: "add((((a + b) + ((c * d) / f)) + g))",
             },
+            PrecedenceTest {
+                input: "a * [1, 2, 3, 4][b * c] * d",
+                exp: "((a * ([1, 2, 3, 4][(b * c)])) * d)",
+            },
+            PrecedenceTest {
+                input: "add(a * b[2], b[1], 2 * [1, 2][1])",
+                exp: "add((a * (b[2])), (b[1]), (2 * ([1, 2][1])))",
+            },
         ];
 
         for t in tests.iter() {
@@ -1185,6 +1224,27 @@ mod test {
                 assert_eq!(arr.elements.len(), 3);
             } else {
                 panic!("{:#?} is not a array", es.expression);
+            }
+        } else {
+            let s = format!("{:#?} is not an expression statement", stmt);
+            panic!("{}", s);
+        }
+    }
+
+    #[test]
+    fn test_parsing_index_expression() {
+        let input = "myArray[1 + 1]";
+        let l = Lexer::new(input);
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        assert_eq!(program.statements.len(), 1);
+        let stmt = &program.statements[0];
+        if let Statement::ExpressionStatement(es) = stmt {
+            if let Expression::IndexExpression(idx) = &es.expression {
+                test_ident(&idx.left, "myArray");
+                test_int_infix_exp(&idx.index, 1, 1, InfixOperator::Plus);
+            } else {
+                panic!("{:#?} is not an index expression", es.expression);
             }
         } else {
             let s = format!("{:#?} is not an expression statement", stmt);

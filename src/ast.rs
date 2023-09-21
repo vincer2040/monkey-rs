@@ -54,6 +54,7 @@ pub enum Expression {
     IfExpression(IfExpression),
     FunctionLiteral(FunctionLiteral),
     CallExpression(CallExpression),
+    IndexExpression(IndexExpression),
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -139,6 +140,13 @@ pub struct CallExpression {
     pub tok: Token, /* the LParen token */
     pub function: std::rc::Rc<Expression>,
     pub arguments: Vec<Expression>,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct IndexExpression {
+    pub tok: Token, /* the LBracket token */
+    pub left: std::rc::Rc<Expression>,
+    pub index: std::rc::Rc<Expression>,
 }
 
 impl Node for Program {
@@ -377,6 +385,7 @@ impl Node for Expression {
             Expression::IfExpression(ife) => ife.string(),
             Expression::FunctionLiteral(fne) => fne.string(),
             Expression::CallExpression(call) => call.string(),
+            Expression::IndexExpression(idx) => idx.string(),
         }
     }
 }
@@ -418,6 +427,22 @@ impl Node for CallExpression {
             }
         }
         res.push(')');
+        res
+    }
+}
+
+impl Node for IndexExpression {
+    fn token_literal(&self) -> String {
+        "[".to_string()
+    }
+
+    fn string(&self) -> String {
+        let mut res = String::new();
+        res.push('(');
+        res.push_str(&self.left.string());
+        res.push('[');
+        res.push_str(&self.index.string());
+        res.push_str("])");
         res
     }
 }
