@@ -34,3 +34,9 @@ $ git clone git@github.com:vincer2040/interpreter-rs.git
 ```console
 $ make run
 ```
+
+4. run the tests
+
+```console
+make test
+```
