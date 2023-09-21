@@ -55,6 +55,7 @@ impl Lexer {
             '[' => tok = Token::LBracket,
             ']' => tok = Token::RBracket,
             ',' => tok = Token::Comma,
+            ':' => tok = Token::Colon,
             ';' => tok = Token::Semicolon,
             '\0' => tok = Token::Eof,
             _ => {
@@ -161,6 +162,7 @@ if (5 < 10) {
 \"foobar\"
 \"foo bar\"
 [1, 2];
+{\"foo\": \"bar\"}
 ";
         let mut l = Lexer::new(&input);
         let exps = vec![
@@ -245,6 +247,11 @@ if (5 < 10) {
             Token::Int("2".into()),
             Token::RBracket,
             Token::Semicolon,
+            Token::LSquirly,
+            Token::String("foo".into()),
+            Token::Colon,
+            Token::String("bar".into()),
+            Token::RSquirly,
             Token::Eof,
         ];
         for exp in exps.iter() {
