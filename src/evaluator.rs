@@ -1,12 +1,12 @@
 use std::ops::Deref;
 
 use crate::ast::{
-    Expression, ExpressionStatement, IfExpression, InfixOperator, PrefixExpression, PrefixOperator,
-    Program, Statement,
+    Expression, ExpressionStatement, HashLiteral, IfExpression, InfixOperator, PrefixExpression,
+    PrefixOperator, Program, Statement,
 };
 use crate::builtins::{first, last, len, push, rest};
 use crate::environment::Environment;
-use crate::object::{Array, Builtin, Function, Object, ObjectTrait, ObjectType};
+use crate::object::{Array, Builtin, Function, Hash, Object, ObjectTrait, ObjectType};
 
 pub const TRUE: Object = Object::Boolean(true);
 pub const FALSE: Object = Object::Boolean(false);
@@ -152,6 +152,7 @@ fn eval_expression(e: &Expression, env: &mut Environment) -> Option<Object> {
             }
             Some(eval_index_expression(&left, &index))
         }
+        Expression::Hash(hash) => eval_hash_literal(hash, env),
     }
 }
 
@@ -382,6 +383,28 @@ fn eval_array_index_expression(left: &Object, index: &Object) -> Object {
     return arr.elements[*idx as usize].clone();
 }
 
+fn eval_hash_literal(hash: &HashLiteral, env: &mut Environment) -> Option<Object> {
+    let mut pairs = Vec::new();
+    for pair in hash.pairs.iter() {
+        let key = match eval_expression(&pair.0, env) {
+            Some(v) => v,
+            None => return None,
+        };
+        if key.type_val() == ObjectType::Error {
+            return Some(key);
+        }
+        let val = match eval_expression(&pair.1, env) {
+            Some(v) => v,
+            None => return None,
+        };
+        if val.type_val() == ObjectType::Error {
+            return Some(val);
+        }
+        pairs.push((key, val));
+    }
+    Some(Object::Hash(Hash { pairs }))
+}
+
 fn extend_function_env(func: &Function, args: &Vec<Object>) -> Environment {
     let mut env = Environment::new_enclosed_env(&func.env);
 
@@ -474,6 +497,15 @@ mod test {
 
     fn test_null_object(obj: &Object) {
         assert_eq!(*obj, Object::Null);
+    }
+
+    fn test_string_object(obj: &Object, exp: &str) {
+        if let Object::String(s) = obj {
+            let full = s.to_string();
+            assert_eq!(full, exp.to_string());
+        } else {
+            panic!("{:#?} is not a string object", obj);
+        }
     }
 
     #[test]
@@ -1069,6 +1101,49 @@ mod test {
             } else {
                 panic!("eval returned None");
             }
+        }
+    }
+
+    #[test]
+    fn test_hash_literals() {
+        let input = "
+        let two = \"two\";
+        {
+            \"one\": 10 - 9,
+            two: 1 + 1,
+            \"thr\" + \"ee\": 6 / 2,
+            4: 4,
+            true: 5,
+            false: 6
+        }
+        ";
+        let obj_opt = test_eval(input);
+        if let Some(obj) = obj_opt {
+            if let Object::Hash(hash) = obj {
+                assert_eq!(hash.pairs.len(), 6);
+                let p1 = &hash.pairs[0];
+                test_string_object(&p1.0, "one");
+                test_int_object(&p1.1, 1);
+                let p2 = &hash.pairs[1];
+                test_string_object(&p2.0, "two");
+                test_int_object(&p2.1, 2);
+                let p3 = &hash.pairs[2];
+                test_string_object(&p3.0, "three");
+                test_int_object(&p3.1, 3);
+                let p4 = &hash.pairs[3];
+                test_int_object(&p4.0, 4);
+                test_int_object(&p4.1, 4);
+                let p5 = &hash.pairs[4];
+                test_bool_object(&p5.0, true);
+                test_int_object(&p5.1, 5);
+                let p6 = &hash.pairs[5];
+                test_bool_object(&p6.0, false);
+                test_int_object(&p6.1, 6);
+            } else {
+                panic!("{:#?} is not a hash", obj);
+            }
+        } else {
+            panic!("eval returned None");
         }
     }
 }

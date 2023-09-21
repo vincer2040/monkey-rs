@@ -16,6 +16,11 @@ pub struct Array {
     pub elements: Vec<Object>,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Hash {
+    pub pairs: Vec<(Object, Object)>,
+}
+
 #[derive(PartialEq, Eq)]
 pub enum ObjectType {
     Null,
@@ -27,6 +32,7 @@ pub enum ObjectType {
     String,
     Builtin,
     Array,
+    Hash,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -40,6 +46,7 @@ pub enum Object {
     String(std::sync::Arc<str>),
     Builtin(Builtin),
     Array(Array),
+    Hash(Hash),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -66,6 +73,7 @@ impl ObjectTrait for Object {
             Self::Function(_) => ObjectType::Function,
             Self::Builtin(_) => ObjectType::Builtin,
             Self::Array(_) => ObjectType::Array,
+            Self::Hash(_) => ObjectType::Hash,
         }
     }
     fn type_string(&self) -> &'static str {
@@ -79,6 +87,7 @@ impl ObjectTrait for Object {
             Self::Function(_) => "FUNCTION",
             Self::Builtin(_) => "BUILTIN",
             Self::Array(_) => "ARRAY",
+            Self::Hash(_) => "HASH",
         }
     }
 
@@ -116,6 +125,21 @@ impl ObjectTrait for Object {
                     }
                 }
                 res.push(']');
+                res
+            }
+            Self::Hash(hash) => {
+                let mut res = String::new();
+                res.push('{');
+                for (i, pair) in hash.pairs.iter().enumerate() {
+                    let key_str = pair.0.inspect();
+                    let val_str = pair.1.inspect();
+                    let key_val_str = format!("{}: {}", key_str, val_str);
+                    res.push_str(&key_val_str);
+                    if i != hash.pairs.len() - 1 {
+                        res.push_str(", ");
+                    }
+                }
+                res.push('}');
                 res
             }
         }
