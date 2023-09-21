@@ -1,4 +1,4 @@
-# interpreter-rs
+# monkey-rs
 
 This is an interpreter implemented in the rust programming language based off of the amazing book 
 "Writing an Interpreter in Go" by Thorsten Ball (you can find the book [here](https://interpreterbook.com/))
