@@ -4,15 +4,19 @@ use crate::ast::{
     Expression, ExpressionStatement, IfExpression, InfixOperator, PrefixExpression, PrefixOperator,
     Program, Statement,
 };
-use crate::builtins::len;
+use crate::builtins::{first, last, len, push, rest};
 use crate::environment::Environment;
 use crate::object::{Array, Builtin, Function, Object, ObjectTrait, ObjectType};
 
-const TRUE: Object = Object::Boolean(true);
-const FALSE: Object = Object::Boolean(false);
-const NULL: Object = Object::Null;
+pub const TRUE: Object = Object::Boolean(true);
+pub const FALSE: Object = Object::Boolean(false);
+pub const NULL: Object = Object::Null;
 
 const LEN: Object = Object::Builtin(Builtin { func: len });
+const FIRST: Object = Object::Builtin(Builtin { func: first });
+const LAST: Object = Object::Builtin(Builtin { func: last });
+const REST: Object = Object::Builtin(Builtin { func: rest });
+const PUSH: Object = Object::Builtin(Builtin { func: push });
 
 pub fn eval(program: &Program, env: &mut Environment) -> Option<Object> {
     eval_statements(&program.statements, env)
@@ -291,8 +295,21 @@ fn eval_identifier(name: &std::sync::Arc<str>, env: &Environment) -> Object {
     match env.get(name) {
         Some(v) => v.clone(),
         None => {
-            if name.to_string() == "len".to_owned() {
+            let s = name.to_string();
+            if s == "len".to_owned() {
                 return LEN;
+            }
+            if s == "first".to_owned() {
+                return FIRST;
+            }
+            if s == "last".to_owned() {
+                return LAST;
+            }
+            if s == "rest".to_owned() {
+                return REST;
+            }
+            if s == "push".to_owned() {
+                return PUSH;
             }
             Object::Error(format!("identifier not found: {}", name))
         }
