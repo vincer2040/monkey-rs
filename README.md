@@ -22,7 +22,7 @@ This is an interpreter implemented in the rust programming language based off of
 
 ### Installation 
 
-1. Ensure you have followed the instructions in the prerequisites
+1. Ensure you have followed the instructions in the [prerequisites](#prerequisites)
 2. Clone this repo
 
 ```console
