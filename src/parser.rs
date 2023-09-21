@@ -1,8 +1,8 @@
 use crate::ast::{
     ArrayLiteral, BlockStatement, BooleanLiteral, CallExpression, Expression, ExpressionStatement,
-    FunctionLiteral, Identifier, IfExpression, IndexExpression, InfixExpression, InfixOperator,
-    IntegerLiteral, LetStatement, PrefixExpression, PrefixOperator, Program, ReturnStatement,
-    Statement, StringLiteral,
+    FunctionLiteral, HashLiteral, Identifier, IfExpression, IndexExpression, InfixExpression,
+    InfixOperator, IntegerLiteral, LetStatement, PrefixExpression, PrefixOperator, Program,
+    ReturnStatement, Statement, StringLiteral,
 };
 use crate::lexer::Lexer;
 use crate::token::Token;
@@ -149,6 +149,7 @@ impl Parser {
                     None => return None,
                 }
             }
+            Token::LSquirly => self.parse_hash_literal(),
             _ => {
                 let e = format!("no prefix parse fn for {:#?}", self.cur);
                 self.errors.push(e);
@@ -455,6 +456,34 @@ impl Parser {
             }
             None => None,
         }
+    }
+
+    fn parse_hash_literal(&mut self) -> Option<Expression> {
+        let tok = self.cur.clone();
+        let mut pairs = Vec::new();
+        while !self.peek_token_is(&Token::RSquirly) {
+            self.next_token();
+            let key = match self.parse_expression(Precedence::Lowest) {
+                Some(e) => e,
+                None => return None,
+            };
+            if !self.expect_peek(Token::Colon) {
+                return None;
+            }
+            self.next_token();
+            let value = match self.parse_expression(Precedence::Lowest) {
+                Some(e) => e,
+                None => return None,
+            };
+            pairs.push((key, value));
+            if !self.peek_token_is(&Token::RSquirly) && !self.expect_peek(Token::Comma) {
+                return None;
+            }
+        }
+        if !self.expect_peek(Token::RSquirly) {
+            return None;
+        }
+        Some(Expression::Hash(HashLiteral { tok, pairs }))
     }
 
     fn next_token(&mut self) {
@@ -1197,6 +1226,7 @@ mod test {
         let l = Lexer::new(input);
         let mut p = Parser::new(l);
         let program = p.parse();
+        check_errors(&p);
         assert_eq!(program.statements.len(), 1);
         let stmt = &program.statements[0];
         if let Statement::ExpressionStatement(es) = stmt {
@@ -1217,6 +1247,7 @@ mod test {
         let l = Lexer::new(input);
         let mut p = Parser::new(l);
         let program = p.parse();
+        check_errors(&p);
         assert_eq!(program.statements.len(), 1);
         let stmt = &program.statements[0];
         if let Statement::ExpressionStatement(es) = stmt {
@@ -1237,12 +1268,124 @@ mod test {
         let l = Lexer::new(input);
         let mut p = Parser::new(l);
         let program = p.parse();
+        check_errors(&p);
         assert_eq!(program.statements.len(), 1);
         let stmt = &program.statements[0];
         if let Statement::ExpressionStatement(es) = stmt {
             if let Expression::IndexExpression(idx) = &es.expression {
                 test_ident(&idx.left, "myArray");
                 test_int_infix_exp(&idx.index, 1, 1, InfixOperator::Plus);
+            } else {
+                panic!("{:#?} is not an index expression", es.expression);
+            }
+        } else {
+            let s = format!("{:#?} is not an expression statement", stmt);
+            panic!("{}", s);
+        }
+    }
+
+    #[test]
+    fn test_parsing_hash_literal_string_keys() {
+        let input = "{\"one\": 1, \"two\": 2, \"three\": 3}";
+        let l = Lexer::new(input);
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        check_errors(&p);
+        assert_eq!(program.statements.len(), 1);
+        let stmt = &program.statements[0];
+        if let Statement::ExpressionStatement(es) = stmt {
+            if let Expression::Hash(hash) = &es.expression {
+                assert_eq!(hash.pairs.len(), 3);
+                let exp_keys = vec!["one", "two", "three"];
+                let exp_ints: Vec<i64> = vec![1, 2, 3];
+                for (i, pair) in hash.pairs.iter().enumerate() {
+                    let exp_key = &exp_keys[i];
+                    let exp_value = &exp_ints[i];
+                    let key = &pair.0;
+                    if let Expression::String(s) = key {
+                        let key_val = s.value.to_string();
+                        assert_eq!(exp_key.to_string(), key_val);
+                    } else {
+                        panic!("{:#?} is not a string literal", key);
+                    }
+                    test_integer_exp(&pair.1, *exp_value);
+                }
+            } else {
+                panic!("{:#?} is not an index expression", es.expression);
+            }
+        } else {
+            let s = format!("{:#?} is not an expression statement", stmt);
+            panic!("{}", s);
+        }
+    }
+
+    #[test]
+    fn test_parsing_empty_hash() {
+        let input = "{}";
+        let l = Lexer::new(input);
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        check_errors(&p);
+        assert_eq!(program.statements.len(), 1);
+        let stmt = &program.statements[0];
+        if let Statement::ExpressionStatement(es) = stmt {
+            if let Expression::Hash(hash) = &es.expression {
+                assert_eq!(hash.pairs.len(), 0);
+            } else {
+                panic!("{:#?} is not an index expression", es.expression);
+            }
+        } else {
+            let s = format!("{:#?} is not an expression statement", stmt);
+            panic!("{}", s);
+        }
+    }
+
+    #[test]
+    fn test_parsing_hash_literal_with_expressions() {
+        let input = "{\"one\": 0 + 1, \"two\": 10 - 8, \"three\": 15 / 5}";
+        let l = Lexer::new(input);
+        let mut p = Parser::new(l);
+        let program = p.parse();
+        check_errors(&p);
+        assert_eq!(program.statements.len(), 1);
+        let stmt = &program.statements[0];
+        if let Statement::ExpressionStatement(es) = stmt {
+            if let Expression::Hash(hash) = &es.expression {
+                assert_eq!(hash.pairs.len(), 3);
+                let exp_keys = vec!["one", "two", "three"];
+                let exp_values = vec![
+                    InfixIntTest {
+                        input: "",
+                        lval: 0,
+                        oper: InfixOperator::Plus,
+                        rval: 1,
+                    },
+                    InfixIntTest {
+                        input: "",
+                        lval: 10,
+                        oper: InfixOperator::Minus,
+                        rval: 8,
+                    },
+                    InfixIntTest {
+                        input: "",
+                        lval: 15,
+                        oper: InfixOperator::Slash,
+                        rval: 5,
+                    },
+                ];
+                for (i, pair) in hash.pairs.iter().enumerate() {
+                    let exp_key = &exp_keys[i];
+                    let exp_val = &exp_values[i];
+                    let key = &pair.0;
+                    let val = &pair.1;
+                    if let Expression::String(s) = key {
+                        let key_val = s.value.to_string();
+                        assert_eq!(exp_key.to_string(), key_val);
+                    } else {
+                        panic!("{:#?} is not a string literal", key);
+                    }
+                    test_int_infix_exp(&val, exp_val.lval, exp_val.rval, exp_val.oper.clone());
+                }
             } else {
                 panic!("{:#?} is not an index expression", es.expression);
             }

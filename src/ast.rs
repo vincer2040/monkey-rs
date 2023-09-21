@@ -55,6 +55,7 @@ pub enum Expression {
     FunctionLiteral(FunctionLiteral),
     CallExpression(CallExpression),
     IndexExpression(IndexExpression),
+    Hash(HashLiteral),
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -79,6 +80,12 @@ pub struct StringLiteral {
 pub struct ArrayLiteral {
     pub tok: Token, /* the LBracket token */
     pub elements: Vec<Expression>,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub struct HashLiteral {
+    pub tok: Token, /* the LSquirly token */
+    pub pairs: Vec<(Expression, Expression)>,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -386,6 +393,7 @@ impl Node for Expression {
             Expression::FunctionLiteral(fne) => fne.string(),
             Expression::CallExpression(call) => call.string(),
             Expression::IndexExpression(idx) => idx.string(),
+            Expression::Hash(hash) => hash.string(),
         }
     }
 }
@@ -443,6 +451,27 @@ impl Node for IndexExpression {
         res.push('[');
         res.push_str(&self.index.string());
         res.push_str("])");
+        res
+    }
+}
+
+impl Node for HashLiteral {
+    fn token_literal(&self) -> String {
+        "{".to_string()
+    }
+
+    fn string(&self) -> String {
+        let mut res = String::new();
+        res.push('{');
+        for (i, pair) in self.pairs.iter().enumerate() {
+            res.push_str(&pair.0.string());
+            res.push(':');
+            res.push_str(&pair.1.string());
+            if i != self.pairs.len() - 1 {
+                res.push_str(", ");
+            }
+        }
+        res.push('}');
         res
     }
 }
