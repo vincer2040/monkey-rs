@@ -26,7 +26,7 @@ This is an interpreter implemented in the rust programming language based off of
 2. Clone this repo
 
 ```console
-$ git clone git@github.com:vincer2040/interpreter-rs.git
+$ git clone git@github.com:vincer2040/monkey-rs.git
 ```
 
 3. run the repl
