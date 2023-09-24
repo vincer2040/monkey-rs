@@ -1,7 +1,7 @@
 use crate::{
     code::{Instructions, Opcode},
     compiler::ByteCode,
-    object::Object,
+    object::{Object, ObjectTrait, ObjectType},
 };
 
 const STACK_SIZE: u16 = 2048;
@@ -74,7 +74,9 @@ impl<'a> VM<'a> {
                 }
                 Opcode::OpTrue => self.push(TRUE)?,
                 Opcode::OpFalse => self.push(FALSE)?,
-                _ => todo!(),
+                Opcode::OpEqual | Opcode::OpNotEqual | Opcode::OpGreaterThan => {
+                    self.execute_comparison(op)?;
+                } // _ => todo!(),
             };
             ip += 1;
         }
@@ -98,6 +100,67 @@ impl<'a> VM<'a> {
         let obj = Object::Integer(result);
         self.push(obj)?;
         Ok(())
+    }
+
+    fn execute_comparison(&mut self, op: Opcode) -> anyhow::Result<()> {
+        let right = match self.pop() {
+            Some(r) => r.clone(),
+            None => return Err(anyhow::anyhow!("pop returned none")),
+        };
+        let left = match self.pop() {
+            Some(l) => l.clone(),
+            None => return Err(anyhow::anyhow!("pop returned none")),
+        };
+
+        println!("{:#?} {:#?}", left, right);
+
+        if left.type_val() == ObjectType::Integer && right.type_val() == ObjectType::Integer {
+            let lval = match left {
+                Object::Integer(v) => v,
+                _ => unreachable!("typeval is integer but {:#?} is not an integer", left),
+            };
+            let rval = match right {
+                Object::Integer(v) => v,
+                _ => unreachable!("typeval is integer but {:#?} is not an integer", left),
+            };
+            return self.execute_integer_comparison(lval, rval, op);
+        }
+        match op {
+            Opcode::OpEqual => self.push(VM::native_bool_to_boolean_object(right == left))?,
+            Opcode::OpNotEqual => self.push(VM::native_bool_to_boolean_object(right != left))?,
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "unkown operator {} ({} {})",
+                    op,
+                    left.type_string(),
+                    right.type_string()
+                ))
+            }
+        };
+        Ok(())
+    }
+
+    fn execute_integer_comparison(
+        &mut self,
+        lval: i64,
+        rval: i64,
+        op: Opcode,
+    ) -> anyhow::Result<()> {
+        match op {
+            Opcode::OpEqual => self.push(VM::native_bool_to_boolean_object(lval == rval))?,
+            Opcode::OpNotEqual => self.push(VM::native_bool_to_boolean_object(lval != rval))?,
+            Opcode::OpGreaterThan => self.push(VM::native_bool_to_boolean_object(lval > rval))?,
+            _ => return Err(anyhow::anyhow!("unknown operator: {}", op)),
+        };
+        Ok(())
+    }
+
+    fn native_bool_to_boolean_object(input: bool) -> Object {
+        if input {
+            TRUE
+        } else {
+            FALSE
+        }
     }
 
     fn push(&mut self, obj: Object) -> anyhow::Result<()> {
@@ -257,9 +320,78 @@ mod test {
                 input: "false",
                 expected: false,
             },
+            VmTestBoolCase {
+                input: "1 < 2",
+                expected: true,
+            },
+            VmTestBoolCase {
+                input: "1 > 2",
+                expected: false,
+            },
+            VmTestBoolCase {
+                input: "1 < 1",
+                expected: false,
+            },
+            VmTestBoolCase {
+                input: "1 > 1",
+                expected: false,
+            },
+            VmTestBoolCase {
+                input: "1 == 1",
+                expected: true,
+            },
+            VmTestBoolCase {
+                input: "1 != 1",
+                expected: false,
+            },
+            VmTestBoolCase {
+                input: "1 == 2",
+                expected: false,
+            },
+            VmTestBoolCase {
+                input: "1 != 2",
+                expected: true,
+            },
+            VmTestBoolCase {
+                input: "true == true",
+                expected: true,
+            },
+            VmTestBoolCase {
+                input: "false == false",
+                expected: true,
+            },
+            VmTestBoolCase {
+                input: "true == false",
+                expected: false,
+            },
+            VmTestBoolCase {
+                input: "true != false",
+                expected: true,
+            },
+            VmTestBoolCase {
+                input: "false != true",
+                expected: true,
+            },
+            VmTestBoolCase {
+                input: "(1 < 2) == true",
+                expected: true,
+            },
+            VmTestBoolCase {
+                input: "(1 < 2) == false",
+                expected: false,
+            },
+            VmTestBoolCase {
+                input: "(1 > 2) == true",
+                expected: false,
+            },
+            VmTestBoolCase {
+                input: "(1 > 2) == false",
+                expected: true,
+            },
         ];
 
-        for test in tests.iter() {
+        for (i, test) in tests.iter().enumerate() {
+            println!("{}", i);
             run_bool_vm_test(test)?;
         }
         Ok(())

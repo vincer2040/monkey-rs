@@ -43,7 +43,15 @@ impl Compiler {
 
     fn compile_expression(&mut self, exp: &Expression) -> anyhow::Result<()> {
         match exp {
-            Expression::InfixExpression(ie) => self.compile_infix_expression(&ie)?,
+            Expression::InfixExpression(ie) => {
+                if ie.operator == InfixOperator::Lt {
+                    self.compile_expression(&ie.right)?;
+                    self.compile_expression(&ie.left)?;
+                    self.emit(Opcode::OpGreaterThan, &[]);
+                } else {
+                    self.compile_infix_expression(&ie)?;
+                }
+            }
             Expression::Integer(i) => self.compile_integer_literal(&i)?,
             Expression::Boolean(b) => {
                 if b.value {
@@ -65,6 +73,9 @@ impl Compiler {
             InfixOperator::Minus => self.emit(Opcode::OpSub, &[]),
             InfixOperator::Asterisk => self.emit(Opcode::OpMul, &[]),
             InfixOperator::Slash => self.emit(Opcode::OpDiv, &[]),
+            InfixOperator::Gt => self.emit(Opcode::OpGreaterThan, &[]),
+            InfixOperator::Eq => self.emit(Opcode::OpEqual, &[]),
+            InfixOperator::NotEq => self.emit(Opcode::OpNotEqual, &[]),
             _ => {
                 return Err(anyhow::anyhow!(
                     "unkown operator {}",
@@ -132,7 +143,7 @@ mod test {
 
     struct CompilerBoolTestCase<'a> {
         input: &'static str,
-        expected_constants: &'static [bool],
+        expected_constants: &'static [i64],
         expected_instructions: &'a [Instructions],
     }
 
@@ -163,7 +174,7 @@ mod test {
         };
         let byte_code = compiler.byte_code();
         test_instructions(test.expected_instructions, byte_code.instructions);
-        test_bool_constants(test.expected_constants, byte_code.constants);
+        test_int_constants(test.expected_constants, byte_code.constants);
     }
 
     fn test_instructions(exp_instructions: &[Instructions], actual: &Instructions) {
@@ -182,6 +193,7 @@ mod test {
         }
     }
 
+    #[allow(unused)]
     fn test_bool_constants(exp_constants: &[bool], constants: &Vec<Object>) {
         assert_eq!(exp_constants.len(), constants.len());
         for (i, exp) in exp_constants.iter().enumerate() {
@@ -207,6 +219,7 @@ mod test {
         }
     }
 
+    #[allow(unused)]
     fn test_bool_object(exp: bool, actual: &Object) {
         if let Object::Boolean(v) = actual {
             assert_eq!(*v, exp);
@@ -287,6 +300,66 @@ mod test {
                 input: "false",
                 expected_constants: &[],
                 expected_instructions: &[make(Opcode::OpFalse, &[]), make(Opcode::OpPop, &[])],
+            },
+            CompilerBoolTestCase {
+                input: "1 > 2",
+                expected_constants: &[1, 2],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpConstant, &[1]),
+                    make(Opcode::OpGreaterThan, &[]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+            CompilerBoolTestCase {
+                input: "1 < 2",
+                expected_constants: &[2, 1],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpConstant, &[1]),
+                    make(Opcode::OpGreaterThan, &[]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+            CompilerBoolTestCase {
+                input: "1 == 2",
+                expected_constants: &[1, 2],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpConstant, &[1]),
+                    make(Opcode::OpEqual, &[]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+            CompilerBoolTestCase {
+                input: "1 != 2",
+                expected_constants: &[1, 2],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpConstant, &[1]),
+                    make(Opcode::OpNotEqual, &[]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+            CompilerBoolTestCase {
+                input: "true == false",
+                expected_constants: &[],
+                expected_instructions: &[
+                    make(Opcode::OpTrue, &[]),
+                    make(Opcode::OpFalse, &[]),
+                    make(Opcode::OpEqual, &[]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+            CompilerBoolTestCase {
+                input: "true != false",
+                expected_constants: &[],
+                expected_instructions: &[
+                    make(Opcode::OpTrue, &[]),
+                    make(Opcode::OpFalse, &[]),
+                    make(Opcode::OpNotEqual, &[]),
+                    make(Opcode::OpPop, &[]),
+                ],
             },
         ];
 
