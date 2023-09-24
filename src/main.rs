@@ -10,6 +10,8 @@ pub mod token;
 pub mod util;
 pub mod environment;
 pub mod builtins;
+pub mod code;
+pub mod compiler;
 
 const PROMP: &'static str = ">> ";
 
@@ -34,7 +36,6 @@ fn main() -> anyhow::Result<()> {
             print_errors(&p);
             continue;
         }
-        // println!("{:#?}", program);
         obj = evaluator::eval(&program, &mut env);
         match obj {
             Some(o) => {
