@@ -37,6 +37,16 @@ const OP_DIV: Definition = Definition {
     operand_widths: &[],
 };
 
+const OP_TRUE: Definition = Definition {
+    name: "OpTrue",
+    operand_widths: &[],
+};
+
+const OP_FALSE: Definition = Definition {
+    name: "OpTrue",
+    operand_widths: &[],
+};
+
 pub trait InstructionsString {
     fn string(&self) -> String;
 }
@@ -49,6 +59,8 @@ pub enum Opcode {
     OpSub = 3,
     OpMul = 4,
     OpDiv = 5,
+    OpTrue = 6,
+    OpFalse = 7,
 }
 
 impl Display for Opcode {
@@ -60,6 +72,8 @@ impl Display for Opcode {
             Opcode::OpSub => write!(f, "{}", 3),
             Opcode::OpMul => write!(f, "{}", 4),
             Opcode::OpDiv => write!(f, "{}", 5),
+            Opcode::OpTrue => write!(f, "{}", 6),
+            Opcode::OpFalse => write!(f, "{}", 7),
         }
     }
 }
@@ -73,6 +87,8 @@ impl Into<Opcode> for u8 {
             3 => Opcode::OpSub,
             4 => Opcode::OpMul,
             5 => Opcode::OpDiv,
+            6 => Opcode::OpTrue,
+            7 => Opcode::OpFalse,
             _ => unreachable!("unkown u8 opcode {}", self),
         }
     }
@@ -127,6 +143,8 @@ pub fn lookup(op: &Opcode) -> anyhow::Result<Definition> {
         Opcode::OpSub => Ok(OP_SUB),
         Opcode::OpMul => Ok(OP_MUL),
         Opcode::OpDiv => Ok(OP_DIV),
+        Opcode::OpTrue => Ok(OP_TRUE),
+        Opcode::OpFalse => Ok(OP_FALSE),
     }
 }
 

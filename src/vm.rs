@@ -7,6 +7,9 @@ use crate::{
 const STACK_SIZE: u16 = 2048;
 const INIT: Option<Object> = None;
 
+const TRUE: Object = Object::Boolean(true);
+const FALSE: Object = Object::Boolean(false);
+
 pub struct VM<'a> {
     constants: &'a Vec<Object>,
     instructions: &'a Instructions,
@@ -68,7 +71,10 @@ impl<'a> VM<'a> {
                 }
                 Opcode::OpPop => {
                     self.pop();
-                } // _ => todo!(),
+                }
+                Opcode::OpTrue => self.push(TRUE)?,
+                Opcode::OpFalse => self.push(FALSE)?,
+                _ => todo!(),
             };
             ip += 1;
         }
@@ -125,6 +131,11 @@ mod test {
         expected: i64,
     }
 
+    struct VmTestBoolCase {
+        input: &'static str,
+        expected: bool,
+    }
+
     fn parse(input: &'static str) -> Program {
         let l = Lexer::new(input);
         let mut p = Parser::new(l);
@@ -133,6 +144,14 @@ mod test {
 
     fn test_integer_object(exp: i64, actual: &Object) {
         if let Object::Integer(v) = actual {
+            assert_eq!(*v, exp);
+        } else {
+            panic!("{:#?} is not an int", actual);
+        }
+    }
+
+    fn test_bool_object(exp: bool, actual: &Object) {
+        if let Object::Boolean(v) = actual {
             assert_eq!(*v, exp);
         } else {
             panic!("{:#?} is not an int", actual);
@@ -149,6 +168,22 @@ mod test {
         let stack_elem = vm.last_popped_stack_elem();
         if let Some(obj) = stack_elem {
             test_integer_object(test.expected, obj);
+        } else {
+            panic!("stack_top returned None");
+        }
+        Ok(())
+    }
+
+    fn run_bool_vm_test(test: &VmTestBoolCase) -> anyhow::Result<()> {
+        let program = parse(test.input);
+        let mut compiler = Compiler::new();
+        compiler.compile(&program)?;
+        let byte_code = compiler.byte_code();
+        let mut vm = VM::new(&byte_code);
+        vm.run()?;
+        let stack_elem = vm.last_popped_stack_elem();
+        if let Some(obj) = stack_elem {
+            test_bool_object(test.expected, obj);
         } else {
             panic!("stack_top returned None");
         }
@@ -208,6 +243,25 @@ mod test {
             run_int_vm_test(test)?;
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_boolean_expressions() -> anyhow::Result<()> {
+        let tests = [
+            VmTestBoolCase {
+                input: "true",
+                expected: true,
+            },
+            VmTestBoolCase {
+                input: "false",
+                expected: false,
+            },
+        ];
+
+        for test in tests.iter() {
+            run_bool_vm_test(test)?;
+        }
         Ok(())
     }
 }

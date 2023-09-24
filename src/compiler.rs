@@ -45,6 +45,13 @@ impl Compiler {
         match exp {
             Expression::InfixExpression(ie) => self.compile_infix_expression(&ie)?,
             Expression::Integer(i) => self.compile_integer_literal(&i)?,
+            Expression::Boolean(b) => {
+                if b.value {
+                    self.emit(Opcode::OpTrue, &[]);
+                } else {
+                    self.emit(Opcode::OpFalse, &[]);
+                }
+            }
             _ => todo!(),
         };
         Ok(())
@@ -111,16 +118,21 @@ mod test {
     use crate::{
         ast::Program,
         code::{make, Instructions, Opcode},
+        compiler::Compiler,
         lexer::Lexer,
         object::Object,
         parser::Parser,
     };
 
-    use super::Compiler;
-
     struct CompilerIntTestCase<'a> {
         input: &'static str,
         expected_constants: &'static [i64],
+        expected_instructions: &'a [Instructions],
+    }
+
+    struct CompilerBoolTestCase<'a> {
+        input: &'static str,
+        expected_constants: &'static [bool],
         expected_instructions: &'a [Instructions],
     }
 
@@ -142,9 +154,22 @@ mod test {
         test_int_constants(test.expected_constants, byte_code.constants);
     }
 
+    fn run_bool_compiler_test(test: &CompilerBoolTestCase) {
+        let program = parse(test.input);
+        let mut compiler = Compiler::new();
+        match compiler.compile(&program) {
+            Ok(()) => {}
+            Err(e) => panic!("{}", e),
+        };
+        let byte_code = compiler.byte_code();
+        test_instructions(test.expected_instructions, byte_code.instructions);
+        test_bool_constants(test.expected_constants, byte_code.constants);
+    }
+
     fn test_instructions(exp_instructions: &[Instructions], actual: &Instructions) {
         let concatted = concat_instructions(exp_instructions);
         assert_eq!(concatted.len(), actual.len());
+        // println!("exp: {:?}, got: {:?}", concatted, actual);
         for (i, ins) in concatted.iter().enumerate() {
             assert_eq!(actual[i], *ins);
         }
@@ -154,6 +179,13 @@ mod test {
         assert_eq!(exp_constants.len(), constants.len());
         for (i, exp) in exp_constants.iter().enumerate() {
             test_integer_object(*exp, &constants[i]);
+        }
+    }
+
+    fn test_bool_constants(exp_constants: &[bool], constants: &Vec<Object>) {
+        assert_eq!(exp_constants.len(), constants.len());
+        for (i, exp) in exp_constants.iter().enumerate() {
+            test_bool_object(*exp, &constants[i]);
         }
     }
 
@@ -169,6 +201,14 @@ mod test {
 
     fn test_integer_object(exp: i64, actual: &Object) {
         if let Object::Integer(v) = actual {
+            assert_eq!(*v, exp);
+        } else {
+            panic!("{:#?} is not an int", actual);
+        }
+    }
+
+    fn test_bool_object(exp: bool, actual: &Object) {
+        if let Object::Boolean(v) = actual {
             assert_eq!(*v, exp);
         } else {
             panic!("{:#?} is not an int", actual);
@@ -232,6 +272,26 @@ mod test {
 
         for test in tests.iter() {
             run_int_compiler_test(test);
+        }
+    }
+
+    #[test]
+    fn test_boolean_expressions() {
+        let tests = [
+            CompilerBoolTestCase {
+                input: "true",
+                expected_constants: &[],
+                expected_instructions: &[make(Opcode::OpTrue, &[]), make(Opcode::OpPop, &[])],
+            },
+            CompilerBoolTestCase {
+                input: "false",
+                expected_constants: &[],
+                expected_instructions: &[make(Opcode::OpFalse, &[]), make(Opcode::OpPop, &[])],
+            },
+        ];
+
+        for test in tests.iter() {
+            run_bool_compiler_test(test);
         }
     }
 }
