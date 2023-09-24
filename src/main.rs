@@ -2,16 +2,16 @@
 use object::ObjectTrait;
 
 pub mod ast;
+pub mod builtins;
+pub mod code;
+pub mod compiler;
+pub mod environment;
 pub mod evaluator;
 pub mod lexer;
 pub mod object;
 pub mod parser;
 pub mod token;
 pub mod util;
-pub mod environment;
-pub mod builtins;
-pub mod code;
-pub mod compiler;
 pub mod vm;
 
 const PROMP: &'static str = ">> ";
@@ -42,7 +42,7 @@ fn main() -> anyhow::Result<()> {
         }
         compiler = compiler::Compiler::new();
         match compiler.compile(&program) {
-            Ok(()) => {},
+            Ok(()) => {}
             Err(e) => {
                 println!("compilation failed:\n{}", e);
                 continue;
@@ -51,10 +51,10 @@ fn main() -> anyhow::Result<()> {
         byte_code = compiler.byte_code();
         vm = vm::VM::new(&byte_code);
         vm.run()?;
-        obj = vm.stack_top();
+        obj = vm.last_popped_stack_elem();
         match obj {
             Some(o) => println!("{}", o.inspect()),
-            None => {},
+            None => {}
         }
     }
     Ok(())

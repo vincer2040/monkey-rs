@@ -2,6 +2,41 @@ use std::fmt::Display;
 
 pub type Instructions = Vec<u8>;
 
+pub struct Definition {
+    pub name: &'static str,
+    pub operand_widths: &'static [usize],
+}
+
+const OP_CONSTANT: Definition = Definition {
+    name: "OpConstant",
+    operand_widths: &[2],
+};
+
+const OP_ADD: Definition = Definition {
+    name: "OpAdd",
+    operand_widths: &[],
+};
+
+const OP_POP: Definition = Definition {
+    name: "OpPop",
+    operand_widths: &[],
+};
+
+const OP_SUB: Definition = Definition {
+    name: "OpSub",
+    operand_widths: &[],
+};
+
+const OP_MUL: Definition = Definition {
+    name: "OpMul",
+    operand_widths: &[],
+};
+
+const OP_DIV: Definition = Definition {
+    name: "OpDiv",
+    operand_widths: &[],
+};
+
 pub trait InstructionsString {
     fn string(&self) -> String;
 }
@@ -10,6 +45,10 @@ pub trait InstructionsString {
 pub enum Opcode {
     OpConstant = 0,
     OpAdd = 1,
+    OpPop = 2,
+    OpSub = 3,
+    OpMul = 4,
+    OpDiv = 5,
 }
 
 impl Display for Opcode {
@@ -17,6 +56,10 @@ impl Display for Opcode {
         match self {
             Opcode::OpConstant => write!(f, "{}", 0),
             Opcode::OpAdd => write!(f, "{}", 1),
+            Opcode::OpPop => write!(f, "{}", 2),
+            Opcode::OpSub => write!(f, "{}", 3),
+            Opcode::OpMul => write!(f, "{}", 4),
+            Opcode::OpDiv => write!(f, "{}", 5),
         }
     }
 }
@@ -26,6 +69,10 @@ impl Into<Opcode> for u8 {
         match self {
             0 => Opcode::OpConstant,
             1 => Opcode::OpAdd,
+            2 => Opcode::OpPop,
+            3 => Opcode::OpSub,
+            4 => Opcode::OpMul,
+            5 => Opcode::OpDiv,
             _ => unreachable!("unkown u8 opcode {}", self),
         }
     }
@@ -72,26 +119,14 @@ fn fmt_instruction(ins: &Instructions, def: &Definition, operands: &[usize]) -> 
     }
 }
 
-pub struct Definition {
-    pub name: &'static str,
-    pub operand_widths: &'static [usize],
-}
-
-const OP_CONSTANT: Definition = Definition {
-    name: "OpConstant",
-    operand_widths: &[2],
-};
-
-const OP_ADD: Definition = Definition {
-    name: "OpAdd",
-    operand_widths: &[],
-};
-
 pub fn lookup(op: &Opcode) -> anyhow::Result<Definition> {
     match op {
         Opcode::OpConstant => Ok(OP_CONSTANT),
         Opcode::OpAdd => Ok(OP_ADD),
-        _ => Err(anyhow::anyhow!("opcode {} undefined", op)),
+        Opcode::OpPop => Ok(OP_POP),
+        Opcode::OpSub => Ok(OP_SUB),
+        Opcode::OpMul => Ok(OP_MUL),
+        Opcode::OpDiv => Ok(OP_DIV),
     }
 }
 

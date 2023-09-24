@@ -1,6 +1,8 @@
-use crate::{object::Object, code::{Instructions, Opcode}, compiler::ByteCode};
-
-
+use crate::{
+    code::{Instructions, Opcode},
+    compiler::ByteCode,
+    object::Object,
+};
 
 const STACK_SIZE: u16 = 2048;
 
@@ -25,7 +27,7 @@ impl<'a> VM<'a> {
         if self.sp == 0 {
             return None;
         }
-        self.stack[(self.sp -1) as usize]
+        self.stack[(self.sp - 1) as usize]
     }
 
     pub fn run(&mut self) -> anyhow::Result<()> {
@@ -44,20 +46,18 @@ impl<'a> VM<'a> {
                     let o = &self.constants[const_idx];
                     self.push(o)?;
                 }
-                Opcode::OpAdd => {
-                    let left = match self.pop() {
+                Opcode::OpAdd | Opcode::OpMul | Opcode::OpSub | Opcode::OpDiv => {
+                    let right = match self.pop() {
                         Some(l) => l.clone(),
                         None => return Err(anyhow::anyhow!("pop returned none")),
                     };
-                    let right = match self.pop() {
+                    let left = match self.pop() {
                         Some(r) => r.clone(),
                         None => return Err(anyhow::anyhow!("pop returned none")),
                     };
                     if let Object::Integer(lval) = left {
                         if let Object::Integer(rval) = right {
-                            // TODO: fix this
-                            let res: &'static Object = Box::leak(Box::new(Object::Integer(lval + rval)));
-                            self.push(&res)?;
+                            self.execute_binary_operation(lval, rval, op)?;
                         } else {
                             return Err(anyhow::anyhow!("{:#?} is not an integer", right));
                         }
@@ -65,9 +65,32 @@ impl<'a> VM<'a> {
                         return Err(anyhow::anyhow!("{:#?} is not an integer", left));
                     }
                 }
+                Opcode::OpPop => {
+                    self.pop();
+                } // _ => todo!(),
             };
             ip += 1;
         }
+        Ok(())
+    }
+
+    pub fn last_popped_stack_elem(&self) -> Option<&Object> {
+        self.stack[self.sp as usize]
+    }
+
+    fn execute_binary_operation(&mut self, lval: i64, rval: i64, op: Opcode) -> anyhow::Result<()> {
+        let result = match op {
+            Opcode::OpAdd => lval + rval,
+            Opcode::OpSub => lval - rval,
+            Opcode::OpMul => lval * rval,
+            Opcode::OpDiv => lval / rval,
+            _ => {
+                return Err(anyhow::anyhow!("unkown integer operator: {}", op));
+            }
+        };
+        // TODO: Fix this
+        let obj: &'static Object = Box::leak(Box::new(Object::Integer(result)));
+        self.push(&obj)?;
         Ok(())
     }
 
@@ -89,11 +112,11 @@ impl<'a> VM<'a> {
 
 #[cfg(test)]
 mod test {
+    use crate::ast::Program;
     use crate::compiler::Compiler;
     use crate::lexer::Lexer;
-    use crate::parser::Parser;
-    use crate::ast::Program;
     use crate::object::Object;
+    use crate::parser::Parser;
 
     use super::VM;
 
@@ -123,7 +146,7 @@ mod test {
         let byte_code = compiler.byte_code();
         let mut vm = VM::new(&byte_code);
         vm.run()?;
-        let stack_elem = vm.stack_top();
+        let stack_elem = vm.last_popped_stack_elem();
         if let Some(obj) = stack_elem {
             test_integer_object(test.expected, obj);
         } else {
@@ -133,7 +156,7 @@ mod test {
     }
 
     #[test]
-    fn test_integer_arithmatic() -> anyhow::Result<()>{
+    fn test_integer_arithmatic() -> anyhow::Result<()> {
         let tests = [
             VmTestIntCase {
                 input: "1",
@@ -146,6 +169,38 @@ mod test {
             VmTestIntCase {
                 input: "1 + 2",
                 expected: 3,
+            },
+            VmTestIntCase {
+                input: "1 - 2",
+                expected: -1,
+            },
+            VmTestIntCase {
+                input: "4 / 2",
+                expected: 2,
+            },
+            VmTestIntCase {
+                input: "50 / 2 * 2 + 10 - 5",
+                expected: 55,
+            },
+            VmTestIntCase {
+                input: "5 + 5 + 5 + 5 - 10",
+                expected: 10,
+            },
+            VmTestIntCase {
+                input: "2 * 2 * 2 * 2 * 2",
+                expected: 32,
+            },
+            VmTestIntCase {
+                input: "5 * 2 + 10",
+                expected: 20,
+            },
+            VmTestIntCase {
+                input: "5 + 2 * 10",
+                expected: 25,
+            },
+            VmTestIntCase {
+                input: "5 * (2 + 10)",
+                expected: 60,
             },
         ];
 

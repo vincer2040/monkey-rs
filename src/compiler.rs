@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Expression, InfixExpression, IntegerLiteral, Program, Statement, InfixOperator},
+    ast::{Expression, InfixExpression, InfixOperator, IntegerLiteral, Program, Statement},
     code::{make, Instructions, Opcode},
     object::Object,
 };
@@ -32,7 +32,10 @@ impl Compiler {
 
     fn compile_statement(&mut self, stmt: &Statement) -> anyhow::Result<()> {
         match stmt {
-            Statement::ExpressionStatement(es) => self.compile_expression(&es.expression)?,
+            Statement::ExpressionStatement(es) => {
+                self.compile_expression(&es.expression)?;
+                self.emit(Opcode::OpPop, &[]);
+            }
             _ => todo!(),
         };
         Ok(())
@@ -43,7 +46,7 @@ impl Compiler {
             Expression::InfixExpression(ie) => self.compile_infix_expression(&ie)?,
             Expression::Integer(i) => self.compile_integer_literal(&i)?,
             _ => todo!(),
-        }
+        };
         Ok(())
     }
 
@@ -51,10 +54,16 @@ impl Compiler {
         self.compile_expression(&ie.left)?;
         self.compile_expression(&ie.right)?;
         match ie.operator {
-            InfixOperator::Plus => {
-                let _ = self.emit(Opcode::OpAdd, &[]);
+            InfixOperator::Plus => self.emit(Opcode::OpAdd, &[]),
+            InfixOperator::Minus => self.emit(Opcode::OpSub, &[]),
+            InfixOperator::Asterisk => self.emit(Opcode::OpMul, &[]),
+            InfixOperator::Slash => self.emit(Opcode::OpDiv, &[]),
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "unkown operator {}",
+                    ie.operator.to_string()
+                ))
             }
-            _ => return Err(anyhow::anyhow!("unkown operator {}", ie.operator.to_string())),
         };
         Ok(())
     }
@@ -168,15 +177,58 @@ mod test {
 
     #[test]
     fn test_integer_arithmatic() {
-        let tests = [CompilerIntTestCase {
-            input: "1 + 2",
-            expected_constants: &[1, 2],
-            expected_instructions: &[
-                make(Opcode::OpConstant, &[0]),
-                make(Opcode::OpConstant, &[1]),
-                make(Opcode::OpAdd, &[]),
-            ],
-        }];
+        let tests = [
+            CompilerIntTestCase {
+                input: "1 + 2",
+                expected_constants: &[1, 2],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpConstant, &[1]),
+                    make(Opcode::OpAdd, &[]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+            CompilerIntTestCase {
+                input: "1; 2",
+                expected_constants: &[1, 2],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpPop, &[]),
+                    make(Opcode::OpConstant, &[1]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+            CompilerIntTestCase {
+                input: "1 - 2",
+                expected_constants: &[1, 2],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpConstant, &[1]),
+                    make(Opcode::OpSub, &[]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+            CompilerIntTestCase {
+                input: "1 * 2",
+                expected_constants: &[1, 2],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpConstant, &[1]),
+                    make(Opcode::OpMul, &[]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+            CompilerIntTestCase {
+                input: "2 / 1",
+                expected_constants: &[2, 1],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpConstant, &[1]),
+                    make(Opcode::OpDiv, &[]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+        ];
 
         for test in tests.iter() {
             run_int_compiler_test(test);
