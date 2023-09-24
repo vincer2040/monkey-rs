@@ -5,11 +5,12 @@ use crate::{
 };
 
 const STACK_SIZE: u16 = 2048;
+const INIT: Option<Object> = None;
 
 pub struct VM<'a> {
     constants: &'a Vec<Object>,
     instructions: &'a Instructions,
-    stack: [Option<&'a Object>; STACK_SIZE as usize],
+    stack: [Option<Object>; STACK_SIZE as usize],
     sp: u16,
 }
 
@@ -18,7 +19,7 @@ impl<'a> VM<'a> {
         Self {
             constants: byte_code.constants,
             instructions: byte_code.instructions,
-            stack: [None; STACK_SIZE as usize],
+            stack: [INIT; STACK_SIZE as usize],
             sp: 0,
         }
     }
@@ -27,7 +28,7 @@ impl<'a> VM<'a> {
         if self.sp == 0 {
             return None;
         }
-        self.stack[(self.sp - 1) as usize]
+        self.stack[(self.sp - 1) as usize].as_ref()
     }
 
     pub fn run(&mut self) -> anyhow::Result<()> {
@@ -44,7 +45,7 @@ impl<'a> VM<'a> {
                     const_idx |= (s << 8) as usize;
                     const_idx |= e as usize;
                     let o = &self.constants[const_idx];
-                    self.push(o)?;
+                    self.push(o.clone())?;
                 }
                 Opcode::OpAdd | Opcode::OpMul | Opcode::OpSub | Opcode::OpDiv => {
                     let right = match self.pop() {
@@ -75,7 +76,7 @@ impl<'a> VM<'a> {
     }
 
     pub fn last_popped_stack_elem(&self) -> Option<&Object> {
-        self.stack[self.sp as usize]
+        self.stack[self.sp as usize].as_ref()
     }
 
     fn execute_binary_operation(&mut self, lval: i64, rval: i64, op: Opcode) -> anyhow::Result<()> {
@@ -88,13 +89,12 @@ impl<'a> VM<'a> {
                 return Err(anyhow::anyhow!("unkown integer operator: {}", op));
             }
         };
-        // TODO: Fix this
-        let obj: &'static Object = Box::leak(Box::new(Object::Integer(result)));
-        self.push(&obj)?;
+        let obj = Object::Integer(result);
+        self.push(obj)?;
         Ok(())
     }
 
-    fn push(&mut self, obj: &'a Object) -> anyhow::Result<()> {
+    fn push(&mut self, obj: Object) -> anyhow::Result<()> {
         if self.sp >= STACK_SIZE {
             return Err(anyhow::anyhow!("stack overflow"));
         }
@@ -104,9 +104,9 @@ impl<'a> VM<'a> {
     }
 
     fn pop(&mut self) -> Option<&Object> {
-        let o = self.stack[(self.sp - 1) as usize];
+        let o = &self.stack[(self.sp - 1) as usize];
         self.sp -= 1;
-        o
+        o.as_ref()
     }
 }
 
