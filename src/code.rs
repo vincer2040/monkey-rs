@@ -100,13 +100,7 @@ impl InstructionsString for Instructions {
         let mut i = 0;
         while i < self.len() {
             let op: Opcode = self[i].into();
-            let def = match lookup(&op) {
-                Ok(d) => d,
-                Err(e) => {
-                    res.push_str(&format!("ERROR: {}\n", e));
-                    continue;
-                }
-            };
+            let def = lookup(&op);
             let (operands, read) = read_operands(&def, &self[i + 1..]);
             res.push_str(&format!(
                 "{:04} {}\n",
@@ -135,26 +129,23 @@ fn fmt_instruction(ins: &Instructions, def: &Definition, operands: &[usize]) -> 
     }
 }
 
-pub fn lookup(op: &Opcode) -> anyhow::Result<Definition> {
+pub fn lookup(op: &Opcode) -> Definition {
     match op {
-        Opcode::OpConstant => Ok(OP_CONSTANT),
-        Opcode::OpAdd => Ok(OP_ADD),
-        Opcode::OpPop => Ok(OP_POP),
-        Opcode::OpSub => Ok(OP_SUB),
-        Opcode::OpMul => Ok(OP_MUL),
-        Opcode::OpDiv => Ok(OP_DIV),
-        Opcode::OpTrue => Ok(OP_TRUE),
-        Opcode::OpFalse => Ok(OP_FALSE),
+        Opcode::OpConstant => OP_CONSTANT,
+        Opcode::OpAdd => OP_ADD,
+        Opcode::OpPop => OP_POP,
+        Opcode::OpSub => OP_SUB,
+        Opcode::OpMul => OP_MUL,
+        Opcode::OpDiv => OP_DIV,
+        Opcode::OpTrue => OP_TRUE,
+        Opcode::OpFalse => OP_FALSE,
     }
 }
 
 pub fn make(op: Opcode, operands: &[usize]) -> Vec<u8> {
     let mut instruction = Vec::new();
     let mut instruction_len = 1;
-    let def = match lookup(&op) {
-        Ok(d) => d,
-        Err(_) => return instruction,
-    };
+    let def = lookup(&op);
 
     for w in def.operand_widths {
         instruction_len += w;
@@ -274,10 +265,7 @@ mod test {
 
         for test in tests.iter() {
             let instruction = make(test.op, test.operands);
-            let def = match lookup(&test.op) {
-                Ok(d) => d,
-                Err(e) => panic!("{}", e),
-            };
+            let def = lookup(&test.op);
 
             let (operands_read, n) = read_operands(&def, &instruction[1..]);
             assert_eq!(n, test.bytes_read);
