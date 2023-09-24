@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Expression, InfixExpression, IntegerLiteral, Program, Statement},
+    ast::{Expression, InfixExpression, IntegerLiteral, Program, Statement, InfixOperator},
     code::{make, Instructions, Opcode},
     object::Object,
 };
@@ -50,6 +50,12 @@ impl Compiler {
     fn compile_infix_expression(&mut self, ie: &InfixExpression) -> anyhow::Result<()> {
         self.compile_expression(&ie.left)?;
         self.compile_expression(&ie.right)?;
+        match ie.operator {
+            InfixOperator::Plus => {
+                let _ = self.emit(Opcode::OpAdd, &[]);
+            }
+            _ => return Err(anyhow::anyhow!("unkown operator {}", ie.operator.to_string())),
+        };
         Ok(())
     }
 
@@ -168,6 +174,7 @@ mod test {
             expected_instructions: &[
                 make(Opcode::OpConstant, &[0]),
                 make(Opcode::OpConstant, &[1]),
+                make(Opcode::OpAdd, &[]),
             ],
         }];
 

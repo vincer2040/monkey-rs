@@ -9,12 +9,14 @@ pub trait InstructionsString {
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy)]
 pub enum Opcode {
     OpConstant = 0,
+    OpAdd = 1,
 }
 
 impl Display for Opcode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Opcode::OpConstant => write!(f, "{}", 0),
+            Opcode::OpAdd => write!(f, "{}", 1),
         }
     }
 }
@@ -23,6 +25,7 @@ impl Into<Opcode> for u8 {
     fn into(self) -> Opcode {
         match self {
             0 => Opcode::OpConstant,
+            1 => Opcode::OpAdd,
             _ => unreachable!("unkown u8 opcode {}", self),
         }
     }
@@ -63,6 +66,7 @@ fn fmt_instruction(ins: &Instructions, def: &Definition, operands: &[usize]) -> 
         );
     }
     match operand_count {
+        0 => def.name.to_owned(),
         1 => format!("{} {}", def.name, operands[0]),
         _ => format!("ERROR: unhandled operand_count for {}\n", def.name),
     }
@@ -78,9 +82,15 @@ const OP_CONSTANT: Definition = Definition {
     operand_widths: &[2],
 };
 
+const OP_ADD: Definition = Definition {
+    name: "OpAdd",
+    operand_widths: &[],
+};
+
 pub fn lookup(op: &Opcode) -> anyhow::Result<Definition> {
     match op {
         Opcode::OpConstant => Ok(OP_CONSTANT),
+        Opcode::OpAdd => Ok(OP_ADD),
         _ => Err(anyhow::anyhow!("opcode {} undefined", op)),
     }
 }
@@ -156,11 +166,18 @@ mod test {
 
     #[test]
     fn test_make() {
-        let tests = [MakeTest {
-            op: Opcode::OpConstant,
-            operands: &[65534],
-            expected: &[Opcode::OpConstant as u8, 255, 254],
-        }];
+        let tests = [
+            MakeTest {
+                op: Opcode::OpConstant,
+                operands: &[65534],
+                expected: &[Opcode::OpConstant as u8, 255, 254],
+            },
+            MakeTest {
+                op: Opcode::OpAdd,
+                operands: &[],
+                expected: &[Opcode::OpAdd as u8],
+            },
+        ];
 
         for test in tests {
             let instruction = make(test.op, test.operands);
@@ -175,13 +192,13 @@ mod test {
     #[test]
     fn test_instruction_string() {
         let instructions = [
-            make(Opcode::OpConstant, &[1]),
+            make(Opcode::OpAdd, &[]),
             make(Opcode::OpConstant, &[2]),
             make(Opcode::OpConstant, &[65535]),
         ];
-        let exp = "0000 OpConstant 1
-0003 OpConstant 2
-0006 OpConstant 65535
+        let exp = "0000 OpAdd
+0001 OpConstant 2
+0004 OpConstant 65535
 ";
         let mut concatted: Instructions = Vec::new();
         for ins in instructions.iter() {
