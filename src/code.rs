@@ -62,6 +62,16 @@ const OP_GREATER_THAN: Definition = Definition {
     operand_widths: &[],
 };
 
+const OP_MINUS: Definition = Definition {
+    name: "OpMinus",
+    operand_widths: &[],
+};
+
+const OP_BANG: Definition = Definition {
+    name: "OpBang",
+    operand_widths: &[],
+};
+
 pub trait InstructionsString {
     fn string(&self) -> String;
 }
@@ -79,6 +89,8 @@ pub enum Opcode {
     OpEqual = 8,
     OpNotEqual = 9,
     OpGreaterThan = 10,
+    OpMinus = 11,
+    OpBang = 12,
 }
 
 impl Display for Opcode {
@@ -92,9 +104,11 @@ impl Display for Opcode {
             Opcode::OpDiv => write!(f, "{}", 5),
             Opcode::OpTrue => write!(f, "{}", 6),
             Opcode::OpFalse => write!(f, "{}", 7),
-            Opcode::OpEqual => write!(f, "{}",  8),
-            Opcode::OpNotEqual => write!(f, "{}",  9),
-            Opcode::OpGreaterThan => write!(f, "{}",  10),
+            Opcode::OpEqual => write!(f, "{}", 8),
+            Opcode::OpNotEqual => write!(f, "{}", 9),
+            Opcode::OpGreaterThan => write!(f, "{}", 10),
+            Opcode::OpMinus => write!(f, "{}", 11),
+            Opcode::OpBang => write!(f, "{}", 12),
         }
     }
 }
@@ -113,6 +127,8 @@ impl Into<Opcode> for u8 {
             8 => Opcode::OpEqual,
             9 => Opcode::OpNotEqual,
             10 => Opcode::OpGreaterThan,
+            11 => Opcode::OpMinus,
+            12 => Opcode::OpBang,
             _ => unreachable!("unkown u8 opcode {}", self),
         }
     }
@@ -166,6 +182,8 @@ pub fn lookup(op: &Opcode) -> Definition {
         Opcode::OpEqual => OP_EQUAL,
         Opcode::OpNotEqual => OP_NOT_EQUAL,
         Opcode::OpGreaterThan => OP_GREATER_THAN,
+        Opcode::OpMinus => OP_MINUS,
+        Opcode::OpBang => OP_BANG,
     }
 }
 

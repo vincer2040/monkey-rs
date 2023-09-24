@@ -76,7 +76,10 @@ impl<'a> VM<'a> {
                 Opcode::OpFalse => self.push(FALSE)?,
                 Opcode::OpEqual | Opcode::OpNotEqual | Opcode::OpGreaterThan => {
                     self.execute_comparison(op)?;
-                } // _ => todo!(),
+                }
+                Opcode::OpBang => self.execute_bang_operator()?,
+                Opcode::OpMinus => self.execute_minus_operator()?,
+                _ => todo!(),
             };
             ip += 1;
         }
@@ -111,8 +114,6 @@ impl<'a> VM<'a> {
             Some(l) => l.clone(),
             None => return Err(anyhow::anyhow!("pop returned none")),
         };
-
-        println!("{:#?} {:#?}", left, right);
 
         if left.type_val() == ObjectType::Integer && right.type_val() == ObjectType::Integer {
             let lval = match left {
@@ -153,6 +154,39 @@ impl<'a> VM<'a> {
             _ => return Err(anyhow::anyhow!("unknown operator: {}", op)),
         };
         Ok(())
+    }
+
+    fn execute_bang_operator(&mut self) -> anyhow::Result<()> {
+        let operand = self.pop();
+        match operand {
+            Some(v) => {
+                if *v == TRUE {
+                    return self.push(FALSE);
+                } else if *v == FALSE {
+                    return self.push(TRUE);
+                } else {
+                    return self.push(FALSE);
+                }
+            }
+            None => Err(anyhow::anyhow!("pop returned None")),
+        }
+    }
+
+    fn execute_minus_operator(&mut self) -> anyhow::Result<()> {
+        let operand = match self.pop() {
+            Some(v) => v,
+            None => return Err(anyhow::anyhow!("pop returned None")),
+        };
+        match operand {
+            Object::Integer(i) => {
+                let obj = Object::Integer(-i);
+                self.push(obj)
+            }
+            _ => Err(anyhow::anyhow!(
+                "unsupported type for negation: {}",
+                operand.type_string()
+            )),
+        }
     }
 
     fn native_bool_to_boolean_object(input: bool) -> Object {
@@ -300,6 +334,22 @@ mod test {
                 input: "5 * (2 + 10)",
                 expected: 60,
             },
+            VmTestIntCase {
+                input: "-5",
+                expected: -5,
+            },
+            VmTestIntCase {
+                input: "-10",
+                expected: -10,
+            },
+            VmTestIntCase {
+                input: "-50 + 100 + -50",
+                expected: 0,
+            },
+            VmTestIntCase {
+                input: "(5 + 10 * 2 + 15 / 3) * 2 + -10",
+                expected: 50,
+            },
         ];
 
         for test in tests.iter() {
@@ -388,10 +438,33 @@ mod test {
                 input: "(1 > 2) == false",
                 expected: true,
             },
+            VmTestBoolCase {
+                input: "!true",
+                expected: false,
+            },
+            VmTestBoolCase {
+                input: "!false",
+                expected: true,
+            },
+            VmTestBoolCase {
+                input: "!5",
+                expected: false,
+            },
+            VmTestBoolCase {
+                input: "!!true",
+                expected: true,
+            },
+            VmTestBoolCase {
+                input: "!!false",
+                expected: false,
+            },
+            VmTestBoolCase {
+                input: "!!5",
+                expected: true,
+            },
         ];
 
-        for (i, test) in tests.iter().enumerate() {
-            println!("{}", i);
+        for test in tests.iter() {
             run_bool_vm_test(test)?;
         }
         Ok(())

@@ -1,5 +1,8 @@
 use crate::{
-    ast::{Expression, InfixExpression, InfixOperator, IntegerLiteral, Program, Statement},
+    ast::{
+        Expression, InfixExpression, InfixOperator, IntegerLiteral, PrefixOperator, Program,
+        Statement,
+    },
     code::{make, Instructions, Opcode},
     object::Object,
 };
@@ -59,6 +62,13 @@ impl Compiler {
                 } else {
                     self.emit(Opcode::OpFalse, &[]);
                 }
+            }
+            Expression::PrefixExpression(pe) => {
+                self.compile_expression(&pe.right)?;
+                match pe.operator {
+                    PrefixOperator::Minus => self.emit(Opcode::OpMinus, &[]),
+                    PrefixOperator::Bang => self.emit(Opcode::OpBang, &[]),
+                };
             }
             _ => todo!(),
         };
@@ -281,6 +291,15 @@ mod test {
                     make(Opcode::OpPop, &[]),
                 ],
             },
+            CompilerIntTestCase {
+                input: "-1",
+                expected_constants: &[1],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpMinus, &[]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
         ];
 
         for test in tests.iter() {
@@ -358,6 +377,15 @@ mod test {
                     make(Opcode::OpTrue, &[]),
                     make(Opcode::OpFalse, &[]),
                     make(Opcode::OpNotEqual, &[]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+            CompilerBoolTestCase {
+                input: "!true",
+                expected_constants: &[],
+                expected_instructions: &[
+                    make(Opcode::OpTrue, &[]),
+                    make(Opcode::OpBang, &[]),
                     make(Opcode::OpPop, &[]),
                 ],
             },
