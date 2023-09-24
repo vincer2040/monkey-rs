@@ -10,39 +10,39 @@ pub struct Program {
     pub statements: Vec<Statement>,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum Statement {
     LetStatement(LetStatement),
     ReturnStatement(ReturnStatement),
     ExpressionStatement(ExpressionStatement),
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct LetStatement {
     pub tok: Token, /* the Let token */
     pub name: Identifier,
     pub value: Expression,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct Identifier {
     pub tok: Token, /* the Ident token */
     pub value: std::sync::Arc<str>,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct ReturnStatement {
     pub tok: Token, /* the Return token */
     pub value: Expression,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct ExpressionStatement {
     pub tok: Token,
     pub expression: Expression,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum Expression {
     Identifier(Identifier),
     Integer(IntegerLiteral),
@@ -58,50 +58,50 @@ pub enum Expression {
     Hash(HashLiteral),
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct IntegerLiteral {
     pub tok: Token,
     pub value: i64,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct BooleanLiteral {
     pub tok: Token,
     pub value: bool,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct StringLiteral {
     pub tok: Token,
     pub value: std::sync::Arc<str>,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct ArrayLiteral {
     pub tok: Token, /* the LBracket token */
     pub elements: Vec<Expression>,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct HashLiteral {
     pub tok: Token, /* the LSquirly token */
     pub pairs: Vec<(Expression, Expression)>,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum PrefixOperator {
     Bang,
     Minus,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct PrefixExpression {
     pub tok: Token,
     pub operator: PrefixOperator,
     pub right: std::rc::Rc<Expression>,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub enum InfixOperator {
     Plus,
     Minus,
@@ -113,7 +113,7 @@ pub enum InfixOperator {
     NotEq,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct InfixExpression {
     pub tok: Token,
     pub left: std::rc::Rc<Expression>,
@@ -121,7 +121,7 @@ pub struct InfixExpression {
     pub right: std::rc::Rc<Expression>,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct IfExpression {
     pub tok: Token, /* the If token */
     pub condition: std::rc::Rc<Expression>,
@@ -129,27 +129,27 @@ pub struct IfExpression {
     pub alternative: Option<BlockStatement>,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct BlockStatement {
     pub tok: Token, /* the { token */
     pub statements: Vec<Statement>,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct FunctionLiteral {
     pub tok: Token, /* the Fn token */
     pub parameters: Vec<Identifier>,
     pub body: BlockStatement,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct CallExpression {
     pub tok: Token, /* the LParen token */
     pub function: std::rc::Rc<Expression>,
     pub arguments: Vec<Expression>,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct IndexExpression {
     pub tok: Token, /* the LBracket token */
     pub left: std::rc::Rc<Expression>,
