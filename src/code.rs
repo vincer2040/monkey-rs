@@ -97,6 +97,11 @@ const OP_GET_GLOBAL: Definition = Definition {
     operand_widths: &[2],
 };
 
+const OP_ARRAY: Definition = Definition {
+    name: "OpArray",
+    operand_widths: &[2],
+};
+
 pub trait InstructionsString {
     fn string(&self) -> String;
 }
@@ -121,6 +126,7 @@ pub enum Opcode {
     OpNull = 15,
     OpSetGlobal = 16,
     OpGetGlobal = 17,
+    OpArray = 18,
 }
 
 impl Display for Opcode {
@@ -144,6 +150,7 @@ impl Display for Opcode {
             Opcode::OpNull => write!(f, "{}", 15),
             Opcode::OpSetGlobal => write!(f, "{}", 16),
             Opcode::OpGetGlobal => write!(f, "{}", 17),
+            Opcode::OpArray => write!(f, "{}", 18),
         }
     }
 }
@@ -169,6 +176,7 @@ impl Into<Opcode> for u8 {
             15 => Opcode::OpNull,
             16 => Opcode::OpSetGlobal,
             17 => Opcode::OpGetGlobal,
+            18 => Opcode::OpArray,
             _ => unreachable!("unkown u8 opcode {}", self),
         }
     }
@@ -225,6 +233,7 @@ pub fn lookup(op: &Opcode) -> Definition {
         Opcode::OpNull => OP_NULL,
         Opcode::OpSetGlobal => OP_SET_GLOBAL,
         Opcode::OpGetGlobal => OP_GET_GLOBAL,
+        Opcode::OpArray => OP_ARRAY,
     }
 }
 

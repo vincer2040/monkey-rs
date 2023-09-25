@@ -42,6 +42,7 @@ fn main() -> anyhow::Result<()> {
             print_errors(&p);
             continue;
         }
+        // TODO: fix all this cloning nonsense
         compiler = compiler::Compiler::new_with_state(symbol_table.clone(), constants.clone());
         match compiler.compile(&program) {
             Ok(()) => {}
@@ -51,6 +52,7 @@ fn main() -> anyhow::Result<()> {
             }
         };
         byte_code = compiler.byte_code();
+        // TODO: fix all this cloning nonsense
         symbol_table = compiler.symbol_table.clone();
         constants = compiler.constants.clone();
         vm = vm::VM::new_with_global_store(&byte_code, &globals);
@@ -60,6 +62,7 @@ fn main() -> anyhow::Result<()> {
             Some(o) => println!("{}", o.inspect()),
             None => {}
         }
+        // TODO: fix all this cloning nonsense
         globals = vm.globals.clone();
     }
     Ok(())

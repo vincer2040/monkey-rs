@@ -1,10 +1,10 @@
 use crate::{
     code::{Instructions, Opcode},
     compiler::ByteCode,
-    object::{Object, ObjectTrait, ObjectType},
+    object::{Array, Object, ObjectTrait, ObjectType},
 };
 
-const STACK_SIZE: u16 = 2048;
+const STACK_SIZE: usize = 2048;
 pub const GLOBAL_SIZE: usize = 65536;
 pub const INIT: Option<Object> = None;
 
@@ -16,9 +16,9 @@ const FALSE: Object = Object::Boolean(false);
 pub struct VM<'a> {
     constants: &'a Vec<Object>,
     instructions: &'a Instructions,
-    stack: [Option<Object>; STACK_SIZE as usize],
+    stack: [Option<Object>; STACK_SIZE],
     pub globals: Vec<Option<Object>>,
-    sp: u16,
+    sp: usize,
 }
 
 impl<'a> VM<'a> {
@@ -75,9 +75,15 @@ impl<'a> VM<'a> {
                     };
                     if let Object::Integer(lval) = left {
                         if let Object::Integer(rval) = right {
-                            self.execute_binary_operation(lval, rval, op)?;
+                            self.execute_binary_int_operation(lval, rval, op)?;
                         } else {
                             return Err(anyhow::anyhow!("{:#?} is not an integer", right));
+                        }
+                    } else if let Object::String(lval) = left {
+                        if let Object::String(rval) = right {
+                            self.execute_binary_string_operation(&lval, &rval, op)?;
+                        } else {
+                            return Err(anyhow::anyhow!("{:#?} is not a string", right));
                         }
                     } else {
                         return Err(anyhow::anyhow!("{:#?} is not an integer", left));
@@ -150,6 +156,19 @@ impl<'a> VM<'a> {
                         None => return Err(anyhow::anyhow!("unknown idx {}", global_idx)),
                     }
                 }
+                Opcode::OpArray => {
+                    let mut num_elements: usize = 0;
+                    let mut tmp = ip + 1;
+                    let s = self.instructions[tmp] as u16;
+                    tmp += 1;
+                    let e = self.instructions[tmp];
+                    num_elements |= (s << 8) as usize;
+                    num_elements |= e as usize;
+                    ip += 2;
+                    let arr = self.build_array(self.sp - num_elements, num_elements)?;
+                    self.sp -= num_elements;
+                    self.push(arr)?;
+                }
             };
             ip += 1;
         }
@@ -157,10 +176,15 @@ impl<'a> VM<'a> {
     }
 
     pub fn last_popped_stack_elem(&self) -> Option<&Object> {
-        self.stack[self.sp as usize].as_ref()
+        self.stack[self.sp].as_ref()
     }
 
-    fn execute_binary_operation(&mut self, lval: i64, rval: i64, op: Opcode) -> anyhow::Result<()> {
+    fn execute_binary_int_operation(
+        &mut self,
+        lval: i64,
+        rval: i64,
+        op: Opcode,
+    ) -> anyhow::Result<()> {
         let result = match op {
             Opcode::OpAdd => lval + rval,
             Opcode::OpSub => lval - rval,
@@ -173,6 +197,22 @@ impl<'a> VM<'a> {
         let obj = Object::Integer(result);
         self.push(obj)?;
         Ok(())
+    }
+
+    fn execute_binary_string_operation(
+        &mut self,
+        lval: &str,
+        rval: &str,
+        op: Opcode,
+    ) -> anyhow::Result<()> {
+        match op {
+            Opcode::OpAdd => {
+                let s = String::new() + lval + rval;
+                let obj = Object::String(s.into());
+                self.push(obj)
+            }
+            _ => return Err(anyhow::anyhow!("unkown string operator {}", op)),
+        }
     }
 
     fn execute_comparison(&mut self, op: Opcode) -> anyhow::Result<()> {
@@ -261,17 +301,33 @@ impl<'a> VM<'a> {
         }
     }
 
+    fn build_array(&mut self, start: usize, end: usize) -> anyhow::Result<Object> {
+        let mut elements: Vec<Object> = Vec::with_capacity(end - start);
+        let mut s = start;
+
+        while s < end {
+            let obj = match &self.stack[s] {
+                Some(v) => v,
+                None => return Err(anyhow::anyhow!("stack is None at {}", s)),
+            };
+            elements.push(obj.clone());
+            s += 1;
+        }
+        let arr = Array { elements };
+        Ok(Object::Array(arr))
+    }
+
     fn push(&mut self, obj: Object) -> anyhow::Result<()> {
         if self.sp >= STACK_SIZE {
             return Err(anyhow::anyhow!("stack overflow"));
         }
-        self.stack[self.sp as usize] = Some(obj);
+        self.stack[self.sp] = Some(obj);
         self.sp += 1;
         Ok(())
     }
 
     fn pop(&mut self) -> Option<&Object> {
-        let o = &self.stack[(self.sp - 1) as usize];
+        let o = &self.stack[self.sp - 1];
         self.sp -= 1;
         o.as_ref()
     }
@@ -300,8 +356,7 @@ mod test {
     use crate::lexer::Lexer;
     use crate::object::Object;
     use crate::parser::Parser;
-
-    use super::VM;
+    use crate::vm::VM;
 
     struct VmTestIntCase {
         input: &'static str,
@@ -313,8 +368,18 @@ mod test {
         expected: bool,
     }
 
-    struct VmNullTestCase {
+    struct VmTestNullCase {
         input: &'static str,
+    }
+
+    struct VmTestStringCase {
+        input: &'static str,
+        expected: &'static str,
+    }
+
+    struct VmTestArrayCase {
+        input: &'static str,
+        expected: &'static [i64],
     }
 
     fn parse(input: &'static str) -> Program {
@@ -336,6 +401,25 @@ mod test {
             assert_eq!(*v, exp);
         } else {
             panic!("{:#?} is not an int", actual);
+        }
+    }
+
+    fn test_string_object(exp: &'static str, actual: &Object) {
+        if let Object::String(v) = actual {
+            assert_eq!(v.to_string(), exp);
+        } else {
+            panic!("{:#?} is not a string", actual);
+        }
+    }
+
+    fn test_int_array_object(exp: &[i64], actual: &Object) {
+        if let Object::Array(arr) = actual {
+            assert_eq!(arr.elements.len(), exp.len());
+            for (i, e) in exp.iter().enumerate() {
+                test_integer_object(*e, &arr.elements[i]);
+            }
+        } else {
+            panic!("{:#?} is not an array", actual);
         }
     }
 
@@ -371,7 +455,7 @@ mod test {
         Ok(())
     }
 
-    fn run_null_vm_test(test: &VmNullTestCase) -> anyhow::Result<()> {
+    fn run_null_vm_test(test: &VmTestNullCase) -> anyhow::Result<()> {
         let program = parse(test.input);
         let mut compiler = Compiler::new();
         compiler.compile(&program)?;
@@ -380,6 +464,38 @@ mod test {
         vm.run()?;
         let stack_elem = vm.last_popped_stack_elem();
         assert_eq!(stack_elem, Some(Object::Null).as_ref());
+        Ok(())
+    }
+
+    fn run_string_vm_test(test: &VmTestStringCase) -> anyhow::Result<()> {
+        let program = parse(test.input);
+        let mut compiler = Compiler::new();
+        compiler.compile(&program)?;
+        let byte_code = compiler.byte_code();
+        let mut vm = VM::new(&byte_code);
+        vm.run()?;
+        let stack_elem = vm.last_popped_stack_elem();
+        if let Some(obj) = stack_elem {
+            test_string_object(test.expected, obj);
+        } else {
+            panic!("stack_top returned None");
+        }
+        Ok(())
+    }
+
+    fn run_array_vm_test(test: &VmTestArrayCase) -> anyhow::Result<()> {
+        let program = parse(test.input);
+        let mut compiler = Compiler::new();
+        compiler.compile(&program)?;
+        let byte_code = compiler.byte_code();
+        let mut vm = VM::new(&byte_code);
+        vm.run()?;
+        let stack_elem = vm.last_popped_stack_elem();
+        if let Some(obj) = stack_elem {
+            test_int_array_object(test.expected, obj);
+        } else {
+            panic!("stack_top returned None");
+        }
         Ok(())
     }
 
@@ -601,10 +717,10 @@ mod test {
     #[test]
     fn test_null_condition() -> anyhow::Result<()> {
         let tests = [
-            VmNullTestCase {
+            VmTestNullCase {
                 input: "if (1 > 2) { 10 }",
             },
-            VmNullTestCase {
+            VmTestNullCase {
                 input: "if (false) { 10 }",
             },
         ];
@@ -636,6 +752,52 @@ mod test {
             run_int_vm_test(test)?;
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_string_expressions() -> anyhow::Result<()> {
+        let tests = [
+            VmTestStringCase {
+                input: "\"monkey\"",
+                expected: "monkey",
+            },
+            VmTestStringCase {
+                input: "\"mon\" + \"key\"",
+                expected: "monkey",
+            },
+            VmTestStringCase {
+                input: "\"mon\" + \"key\" + \"banana\"",
+                expected: "monkeybanana",
+            },
+        ];
+
+        for test in tests.iter() {
+            run_string_vm_test(test)?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_array_expressions() -> anyhow::Result<()> {
+        let tests = [
+            VmTestArrayCase {
+                input: "[]",
+                expected: &[],
+            },
+            VmTestArrayCase {
+                input: "[1, 2, 3]",
+                expected: &[1, 2, 3],
+            },
+            VmTestArrayCase {
+                input: "[1 + 2, 3 * 4, 5 + 6]",
+                expected: &[3, 12, 11],
+            },
+        ];
+
+        for test in tests.iter() {
+            run_array_vm_test(test)?;
+        }
         Ok(())
     }
 }

@@ -160,6 +160,18 @@ impl Compiler {
                 };
                 self.emit(Opcode::OpGetGlobal, &[symbol.idx]);
             }
+            Expression::String(s) => {
+                let obj = Object::String(s.value.clone());
+                let x = self.add_constant(obj);
+                self.emit(Opcode::OpConstant, &[x]);
+            }
+            Expression::Array(arr) => {
+                let len = arr.elements.len();
+                for el in arr.elements.iter() {
+                    self.compile_expression(el)?;
+                }
+                self.emit(Opcode::OpArray, &[len]);
+            }
             _ => todo!(),
         };
         Ok(())
@@ -300,6 +312,18 @@ mod test {
         expected_instructions: &'a [Instructions],
     }
 
+    struct CompilerStringTestCase<'a> {
+        input: &'static str,
+        expected_constants: &'static [&'static str],
+        expected_instructions: &'a [Instructions],
+    }
+
+    struct CompilerArrayTestCase<'a> {
+        input: &'static str,
+        expected_constants: &'a [i64],
+        expected_instructions: &'a [Instructions],
+    }
+
     fn parse(input: &'static str) -> Program {
         let l = Lexer::new(input);
         let mut p = Parser::new(l);
@@ -330,6 +354,30 @@ mod test {
         test_int_constants(test.expected_constants, byte_code.constants);
     }
 
+    fn run_string_compiler_test(test: &CompilerStringTestCase) {
+        let program = parse(test.input);
+        let mut compiler = Compiler::new();
+        match compiler.compile(&program) {
+            Ok(()) => {}
+            Err(e) => panic!("{}", e),
+        };
+        let byte_code = compiler.byte_code();
+        test_instructions(test.expected_instructions, byte_code.instructions);
+        test_string_constants(test.expected_constants, byte_code.constants);
+    }
+
+    fn run_array_compiler_test(test: &CompilerArrayTestCase) {
+        let program = parse(test.input);
+        let mut compiler = Compiler::new();
+        match compiler.compile(&program) {
+            Ok(()) => {}
+            Err(e) => panic!("{}", e),
+        };
+        let byte_code = compiler.byte_code();
+        test_instructions(test.expected_instructions, byte_code.instructions);
+        test_array_constants(test.expected_constants, byte_code.constants);
+    }
+
     fn test_instructions(exp_instructions: &[Instructions], actual: &Instructions) {
         let concatted = concat_instructions(exp_instructions);
         println!("exp: {:?}\ngot: {:?}", concatted, actual);
@@ -354,6 +402,20 @@ mod test {
         }
     }
 
+    fn test_string_constants(exp_constants: &[&'static str], constants: &Vec<Object>) {
+        assert_eq!(exp_constants.len(), constants.len());
+        for (i, exp) in exp_constants.iter().enumerate() {
+            test_string_obj(*exp, &constants[i]);
+        }
+    }
+
+    fn test_array_constants(exp_constants: &[i64], constants: &Vec<Object>) {
+        assert_eq!(exp_constants.len(), constants.len());
+        for (i, exp) in exp_constants.iter().enumerate() {
+            test_integer_object(*exp, &constants[i]);
+        }
+    }
+
     fn concat_instructions(s: &[Instructions]) -> Instructions {
         let mut res = Vec::new();
         for x in s.iter() {
@@ -369,6 +431,26 @@ mod test {
             assert_eq!(*v, exp);
         } else {
             panic!("{:#?} is not an int", actual);
+        }
+    }
+
+    fn test_string_obj(exp: &'static str, actual: &Object) {
+        if let Object::String(v) = actual {
+            assert_eq!(*v, exp.into());
+        } else {
+            panic!("{:#?} is not a string", actual);
+        }
+    }
+
+    #[allow(unused)]
+    fn test_array_obj(exp: &Vec<i64>, actual: &Object) {
+        if let Object::Array(v) = actual {
+            assert_eq!(exp.len(), v.elements.len());
+            for (i, val) in v.elements.iter().enumerate() {
+                test_integer_object(exp[i], val);
+            }
+        } else {
+            panic!("{:#?} is not a string", actual);
         }
     }
 
@@ -658,6 +740,74 @@ mod test {
                 None => panic!("global.resolve returned None for {}", sym.name),
             };
             assert_eq!(*result, *sym);
+        }
+    }
+
+    #[test]
+    fn test_string_expressions() {
+        let tests = [
+            CompilerStringTestCase {
+                input: "\"monkey\"",
+                expected_constants: &["monkey"],
+                expected_instructions: &[make(Opcode::OpConstant, &[0]), make(Opcode::OpPop, &[])],
+            },
+            CompilerStringTestCase {
+                input: "\"mon\" + \"key\"",
+                expected_constants: &["mon", "key"],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpConstant, &[1]),
+                    make(Opcode::OpAdd, &[]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+        ];
+
+        for test in tests.iter() {
+            run_string_compiler_test(test);
+        }
+    }
+
+    #[test]
+    fn test_array_literals() {
+        let tests = [
+            CompilerArrayTestCase {
+                input: "[]",
+                expected_constants: &[],
+                expected_instructions: &[make(Opcode::OpArray, &[0]), make(Opcode::OpPop, &[])],
+            },
+            CompilerArrayTestCase {
+                input: "[1, 2, 3]",
+                expected_constants: &[1, 2, 3],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpConstant, &[1]),
+                    make(Opcode::OpConstant, &[2]),
+                    make(Opcode::OpArray, &[3]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+            CompilerArrayTestCase {
+                input: "[1 + 2, 3 - 4, 5 * 6]",
+                expected_constants: &[1, 2, 3, 4, 5, 6],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpConstant, &[1]),
+                    make(Opcode::OpAdd, &[]),
+                    make(Opcode::OpConstant, &[2]),
+                    make(Opcode::OpConstant, &[3]),
+                    make(Opcode::OpSub, &[]),
+                    make(Opcode::OpConstant, &[4]),
+                    make(Opcode::OpConstant, &[5]),
+                    make(Opcode::OpMul, &[]),
+                    make(Opcode::OpArray, &[3]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+        ];
+
+        for test in tests.iter() {
+            run_array_compiler_test(test);
         }
     }
 }
