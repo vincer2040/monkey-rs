@@ -7,17 +7,42 @@ use crate::{
     object::Object,
 };
 
+#[derive(Clone)]
 pub struct Compiler {
     pub instructions: Instructions,
     pub constants: Vec<Object>,
     pub last_instruction: Option<EmittedInstruction>,
     pub previous_instruction: Option<EmittedInstruction>,
+    pub symbol_table: SymbolTable,
 }
 
 #[derive(Clone)]
 pub struct EmittedInstruction {
     pub opcode: Opcode,
     pub position: usize,
+}
+
+pub struct ByteCode<'a> {
+    pub instructions: &'a Instructions,
+    pub constants: &'a Vec<Object>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum SymbolScope {
+    Global,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Symbol {
+    pub name: std::sync::Arc<str>,
+    pub scope: SymbolScope,
+    pub idx: usize,
+}
+
+#[derive(Clone)]
+pub struct SymbolTable {
+    store: std::collections::HashMap<std::sync::Arc<str>, Symbol>,
+    num_definitions: usize,
 }
 
 impl Compiler {
@@ -29,6 +54,18 @@ impl Compiler {
             constants,
             last_instruction: None,
             previous_instruction: None,
+            symbol_table: SymbolTable::new(),
+        }
+    }
+
+    pub fn new_with_state(symbol_table: SymbolTable, constants: Vec<Object>) -> Self {
+        let instructions = Vec::new();
+        Self {
+            instructions,
+            constants,
+            last_instruction: None,
+            previous_instruction: None,
+            symbol_table,
         }
     }
 
@@ -55,6 +92,11 @@ impl Compiler {
             Statement::ExpressionStatement(es) => {
                 self.compile_expression(&es.expression)?;
                 self.emit(Opcode::OpPop, &[]);
+            }
+            Statement::LetStatement(ls) => {
+                self.compile_expression(&ls.value)?;
+                let symbol = self.symbol_table.define(ls.name.value.clone());
+                self.emit(Opcode::OpSetGlobal, &[symbol.idx]);
             }
             _ => todo!(),
         };
@@ -110,6 +152,13 @@ impl Compiler {
                 };
                 let after_alternative_pos = self.instructions.len();
                 self.change_operands(jump_pos, after_alternative_pos);
+            }
+            Expression::Identifier(ident) => {
+                let symbol = match self.symbol_table.resolve(&ident.value) {
+                    Some(s) => s,
+                    None => return Err(anyhow::anyhow!("undefined variable {}", ident.value)),
+                };
+                self.emit(Opcode::OpGetGlobal, &[symbol.idx]);
             }
             _ => todo!(),
         };
@@ -202,9 +251,30 @@ impl Compiler {
     }
 }
 
-pub struct ByteCode<'a> {
-    pub instructions: &'a Instructions,
-    pub constants: &'a Vec<Object>,
+impl SymbolTable {
+    pub fn new() -> Self {
+        let store = std::collections::HashMap::new();
+        let num_definitions = 0;
+        Self {
+            store,
+            num_definitions,
+        }
+    }
+
+    pub fn define(&mut self, key: std::sync::Arc<str>) -> Symbol {
+        let sym = Symbol {
+            name: key.clone(),
+            scope: SymbolScope::Global,
+            idx: self.num_definitions,
+        };
+        self.store.insert(key, sym.clone());
+        self.num_definitions += 1;
+        sym
+    }
+
+    pub fn resolve(&self, key: &std::sync::Arc<str>) -> Option<&Symbol> {
+        self.store.get(key)
+    }
 }
 
 #[cfg(test)]
@@ -212,7 +282,7 @@ mod test {
     use crate::{
         ast::Program,
         code::{make, Instructions, Opcode},
-        compiler::Compiler,
+        compiler::{Compiler, Symbol, SymbolScope, SymbolTable},
         lexer::Lexer,
         object::Object,
         parser::Parser,
@@ -262,7 +332,7 @@ mod test {
 
     fn test_instructions(exp_instructions: &[Instructions], actual: &Instructions) {
         let concatted = concat_instructions(exp_instructions);
-        println!("exp: {:?}, got: {:?}", concatted, actual);
+        println!("exp: {:?}\ngot: {:?}", concatted, actual);
         assert_eq!(concatted.len(), actual.len());
         for (i, ins) in concatted.iter().enumerate() {
             assert_eq!(actual[i], *ins);
@@ -486,9 +556,108 @@ mod test {
             ],
         }];
 
-        for (i, test) in tests.iter().enumerate() {
-            println!("{}", i);
+        for test in tests.iter() {
             run_int_compiler_test(test);
+        }
+    }
+
+    #[test]
+    fn test_global_let_statement() {
+        let tests = [
+            CompilerIntTestCase {
+                input: "let one = 1;
+                    let two = 2;",
+                expected_constants: &[1, 2],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpSetGlobal, &[0]),
+                    make(Opcode::OpConstant, &[1]),
+                    make(Opcode::OpSetGlobal, &[1]),
+                ],
+            },
+            CompilerIntTestCase {
+                input: "let one = 1;
+                       one;",
+                expected_constants: &[1],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpSetGlobal, &[0]),
+                    make(Opcode::OpGetGlobal, &[0]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+            CompilerIntTestCase {
+                input: "let one = 1;
+                    let two = one;
+                    two;",
+                expected_constants: &[1],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpSetGlobal, &[0]),
+                    make(Opcode::OpGetGlobal, &[0]),
+                    make(Opcode::OpSetGlobal, &[1]),
+                    make(Opcode::OpGetGlobal, &[1]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+        ];
+
+        for test in tests.iter() {
+            run_int_compiler_test(test);
+        }
+    }
+
+    #[test]
+    fn test_define() {
+        let expected = std::collections::HashMap::from([
+            (
+                "a",
+                Symbol {
+                    name: "a".into(),
+                    scope: SymbolScope::Global,
+                    idx: 0,
+                },
+            ),
+            (
+                "b",
+                Symbol {
+                    name: "b".into(),
+                    scope: SymbolScope::Global,
+                    idx: 1,
+                },
+            ),
+        ]);
+        let mut global = SymbolTable::new();
+        let a = global.define("a".into());
+        assert_eq!(a, expected["a"]);
+        let b = global.define("b".into());
+        assert_eq!(b, expected["b"]);
+    }
+
+    #[test]
+    fn test_resolve_global() {
+        let mut global = SymbolTable::new();
+        global.define("a".into());
+        global.define("b".into());
+        let expected = [
+            Symbol {
+                name: "a".into(),
+                scope: SymbolScope::Global,
+                idx: 0,
+            },
+            Symbol {
+                name: "b".into(),
+                scope: SymbolScope::Global,
+                idx: 1,
+            },
+        ];
+
+        for sym in expected.iter() {
+            let result = match global.resolve(&sym.name) {
+                Some(v) => v,
+                None => panic!("global.resolve returned None for {}", sym.name),
+            };
+            assert_eq!(*result, *sym);
         }
     }
 }

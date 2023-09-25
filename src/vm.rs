@@ -5,16 +5,19 @@ use crate::{
 };
 
 const STACK_SIZE: u16 = 2048;
-const INIT: Option<Object> = None;
+pub const GLOBAL_SIZE: usize = 65536;
+pub const INIT: Option<Object> = None;
 
 const NULL: Object = Object::Null;
 const TRUE: Object = Object::Boolean(true);
 const FALSE: Object = Object::Boolean(false);
 
+#[derive(Clone)]
 pub struct VM<'a> {
     constants: &'a Vec<Object>,
     instructions: &'a Instructions,
     stack: [Option<Object>; STACK_SIZE as usize],
+    pub globals: Vec<Option<Object>>,
     sp: u16,
 }
 
@@ -24,8 +27,18 @@ impl<'a> VM<'a> {
             constants: byte_code.constants,
             instructions: byte_code.instructions,
             stack: [INIT; STACK_SIZE as usize],
+            globals: [INIT; GLOBAL_SIZE].to_vec(),
             sp: 0,
         }
+    }
+
+    pub fn new_with_global_store(
+        byte_code: &'a ByteCode,
+        globals: &'a Vec<Option<Object>>,
+    ) -> Self {
+        let mut s = Self::new(byte_code);
+        s.globals = globals.to_vec();
+        s
     }
 
     pub fn stack_top(&self) -> Option<&Object> {
@@ -110,7 +123,33 @@ impl<'a> VM<'a> {
                 Opcode::OpNull => {
                     self.push(NULL)?;
                 }
-                _ => todo!(),
+                Opcode::OpSetGlobal => {
+                    let mut global_idx: usize = 0;
+                    let mut tmp = ip + 1;
+                    let s = self.instructions[tmp] as u16;
+                    tmp += 1;
+                    let e = self.instructions[tmp];
+                    global_idx |= (s << 8) as usize;
+                    global_idx |= e as usize;
+                    ip += 2;
+                    self.globals[global_idx] = self.pop().cloned();
+                }
+                Opcode::OpGetGlobal => {
+                    let mut global_idx: usize = 0;
+                    let mut tmp = ip + 1;
+                    let s = self.instructions[tmp] as u16;
+                    tmp += 1;
+                    let e = self.instructions[tmp];
+                    global_idx |= (s << 8) as usize;
+                    global_idx |= e as usize;
+                    ip += 2;
+                    match &self.globals[global_idx] {
+                        Some(obj) => {
+                            self.push(obj.clone())?;
+                        }
+                        None => return Err(anyhow::anyhow!("unknown idx {}", global_idx)),
+                    }
+                }
             };
             ip += 1;
         }
@@ -573,6 +612,30 @@ mod test {
         for test in tests.iter() {
             run_null_vm_test(test)?;
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_global_let_statements() -> anyhow::Result<()> {
+        let tests = [
+            VmTestIntCase {
+                input: "let one = 1; one",
+                expected: 1,
+            },
+            VmTestIntCase {
+                input: "let one = 1; let two = 2; one + two",
+                expected: 3,
+            },
+            VmTestIntCase {
+                input: "let one = 1; let two = one + one; one + two",
+                expected: 3,
+            },
+        ];
+
+        for test in tests.iter() {
+            run_int_vm_test(test)?;
+        }
+
         Ok(())
     }
 }

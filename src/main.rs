@@ -17,7 +17,9 @@ pub mod vm;
 const PROMP: &'static str = ">> ";
 
 fn main() -> anyhow::Result<()> {
-    // let mut env = Environment::new();
+    let mut constants: Vec<object::Object> = Vec::new();
+    let mut symbol_table: compiler::SymbolTable = compiler::SymbolTable::new();
+    let mut globals: Vec<Option<object::Object>> = [vm::INIT; vm::GLOBAL_SIZE].to_vec();
     loop {
         let line = util::read_line(PROMP)?;
         let l: lexer::Lexer;
@@ -40,7 +42,7 @@ fn main() -> anyhow::Result<()> {
             print_errors(&p);
             continue;
         }
-        compiler = compiler::Compiler::new();
+        compiler = compiler::Compiler::new_with_state(symbol_table.clone(), constants.clone());
         match compiler.compile(&program) {
             Ok(()) => {}
             Err(e) => {
@@ -49,13 +51,16 @@ fn main() -> anyhow::Result<()> {
             }
         };
         byte_code = compiler.byte_code();
-        vm = vm::VM::new(&byte_code);
+        symbol_table = compiler.symbol_table.clone();
+        constants = compiler.constants.clone();
+        vm = vm::VM::new_with_global_store(&byte_code, &globals);
         vm.run()?;
         obj = vm.last_popped_stack_elem();
         match obj {
             Some(o) => println!("{}", o.inspect()),
             None => {}
         }
+        globals = vm.globals.clone();
     }
     Ok(())
 }

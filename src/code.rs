@@ -87,6 +87,16 @@ const OP_NULL: Definition = Definition {
     operand_widths: &[],
 };
 
+const OP_SET_GLOBAL: Definition = Definition {
+    name: "OpSetGlobal",
+    operand_widths: &[2],
+};
+
+const OP_GET_GLOBAL: Definition = Definition {
+    name: "OpGetGlobal",
+    operand_widths: &[2],
+};
+
 pub trait InstructionsString {
     fn string(&self) -> String;
 }
@@ -109,6 +119,8 @@ pub enum Opcode {
     OpJumpNotTruthy = 13,
     OpJump = 14,
     OpNull = 15,
+    OpSetGlobal = 16,
+    OpGetGlobal = 17,
 }
 
 impl Display for Opcode {
@@ -130,6 +142,8 @@ impl Display for Opcode {
             Opcode::OpJumpNotTruthy => write!(f, "{}", 13),
             Opcode::OpJump => write!(f, "{}", 14),
             Opcode::OpNull => write!(f, "{}", 15),
+            Opcode::OpSetGlobal => write!(f, "{}", 16),
+            Opcode::OpGetGlobal => write!(f, "{}", 17),
         }
     }
 }
@@ -153,6 +167,8 @@ impl Into<Opcode> for u8 {
             13 => Opcode::OpJumpNotTruthy,
             14 => Opcode::OpJump,
             15 => Opcode::OpNull,
+            16 => Opcode::OpSetGlobal,
+            17 => Opcode::OpGetGlobal,
             _ => unreachable!("unkown u8 opcode {}", self),
         }
     }
@@ -166,18 +182,14 @@ impl InstructionsString for Instructions {
             let op: Opcode = self[i].into();
             let def = lookup(&op);
             let (operands, read) = read_operands(&def, &self[i + 1..]);
-            res.push_str(&format!(
-                "{:04} {}\n",
-                i,
-                fmt_instruction(&self, &def, &operands)
-            ));
+            res.push_str(&format!("{:04} {}\n", i, fmt_instruction(&def, &operands)));
             i += 1 + read;
         }
         res
     }
 }
 
-fn fmt_instruction(ins: &Instructions, def: &Definition, operands: &[usize]) -> String {
+fn fmt_instruction(def: &Definition, operands: &[usize]) -> String {
     let operand_count = def.operand_widths.len();
     let operands_len = operands.len();
     if operand_count != operands_len {
@@ -211,6 +223,8 @@ pub fn lookup(op: &Opcode) -> Definition {
         Opcode::OpJumpNotTruthy => OP_JUMP_NOT_TRUTHY,
         Opcode::OpJump => OP_JUMP,
         Opcode::OpNull => OP_NULL,
+        Opcode::OpSetGlobal => OP_SET_GLOBAL,
+        Opcode::OpGetGlobal => OP_GET_GLOBAL,
     }
 }
 
