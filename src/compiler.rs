@@ -10,6 +10,14 @@ use crate::{
 pub struct Compiler {
     pub instructions: Instructions,
     pub constants: Vec<Object>,
+    pub last_instruction: Option<EmittedInstruction>,
+    pub previous_instruction: Option<EmittedInstruction>,
+}
+
+#[derive(Clone)]
+pub struct EmittedInstruction {
+    pub opcode: Opcode,
+    pub position: usize,
 }
 
 impl Compiler {
@@ -19,11 +27,20 @@ impl Compiler {
         Self {
             instructions,
             constants,
+            last_instruction: None,
+            previous_instruction: None,
         }
     }
 
     pub fn compile(&mut self, program: &Program) -> anyhow::Result<()> {
         self.compile_statements(&program.statements)
+    }
+
+    pub fn byte_code(&self) -> ByteCode {
+        ByteCode {
+            instructions: &self.instructions,
+            constants: &self.constants,
+        }
     }
 
     fn compile_statements(&mut self, stmts: &Vec<Statement>) -> anyhow::Result<()> {
@@ -70,6 +87,30 @@ impl Compiler {
                     PrefixOperator::Bang => self.emit(Opcode::OpBang, &[]),
                 };
             }
+            Expression::IfExpression(ife) => {
+                self.compile_expression(&ife.condition)?;
+                let jump_not_truthy_pos = self.emit(Opcode::OpJumpNotTruthy, &[9999]);
+                self.compile_statements(&ife.consequence.statements)?;
+                if self.last_instruction_is_pop() {
+                    self.remove_last_pop()?;
+                }
+                let jump_pos = self.emit(Opcode::OpJump, &[9999]);
+                let after_consequence_pos = self.instructions.len();
+                self.change_operands(jump_not_truthy_pos, after_consequence_pos);
+                match &ife.alternative {
+                    None => {
+                        self.emit(Opcode::OpNull, &[]);
+                    }
+                    Some(alt) => {
+                        self.compile_statements(&alt.statements)?;
+                        if self.last_instruction_is_pop() {
+                            self.remove_last_pop()?;
+                        }
+                    }
+                };
+                let after_alternative_pos = self.instructions.len();
+                self.change_operands(jump_pos, after_alternative_pos);
+            }
             _ => todo!(),
         };
         Ok(())
@@ -110,7 +151,9 @@ impl Compiler {
 
     fn emit(&mut self, op: Opcode, operands: &[usize]) -> usize {
         let ins = make(op, operands);
-        self.add_instruction(&ins)
+        let pos = self.add_instruction(&ins);
+        self.set_last_instruction(op, pos);
+        pos
     }
 
     fn add_instruction(&mut self, ins: &Vec<u8>) -> usize {
@@ -121,11 +164,41 @@ impl Compiler {
         pos_new_instruction
     }
 
-    pub fn byte_code(&self) -> ByteCode {
-        ByteCode {
-            instructions: &self.instructions,
-            constants: &self.constants,
+    fn set_last_instruction(&mut self, opcode: Opcode, position: usize) {
+        let prev = &self.previous_instruction;
+        let last = EmittedInstruction { opcode, position };
+        self.previous_instruction = prev.clone();
+        self.last_instruction = Some(last);
+    }
+
+    fn last_instruction_is_pop(&self) -> bool {
+        match &self.last_instruction {
+            Some(l) => l.opcode == Opcode::OpPop,
+            None => false,
         }
+    }
+
+    fn remove_last_pop(&mut self) -> anyhow::Result<()> {
+        match &self.last_instruction {
+            Some(l) => {
+                self.instructions = self.instructions[0..l.position].to_owned();
+                Ok(())
+            }
+            None => Err(anyhow::anyhow!("last instruction is None")),
+        }
+    }
+
+    fn replace_instructions(&mut self, pos: usize, new_instruction: &[u8]) {
+        for (i, ins) in new_instruction.iter().enumerate() {
+            self.instructions[pos + i] = *ins;
+        }
+    }
+
+    fn change_operands(&mut self, op_pos: usize, operand: usize) {
+        let op_num = self.instructions[op_pos];
+        let op: Opcode = op_num.into();
+        let new_instruction = make(op, &[operand]);
+        self.replace_instructions(op_pos, &new_instruction);
     }
 }
 
@@ -189,8 +262,8 @@ mod test {
 
     fn test_instructions(exp_instructions: &[Instructions], actual: &Instructions) {
         let concatted = concat_instructions(exp_instructions);
+        println!("exp: {:?}, got: {:?}", concatted, actual);
         assert_eq!(concatted.len(), actual.len());
-        // println!("exp: {:?}, got: {:?}", concatted, actual);
         for (i, ins) in concatted.iter().enumerate() {
             assert_eq!(actual[i], *ins);
         }
@@ -393,6 +466,29 @@ mod test {
 
         for test in tests.iter() {
             run_bool_compiler_test(test);
+        }
+    }
+
+    #[test]
+    fn test_conditionals() {
+        let tests = [CompilerIntTestCase {
+            input: "if (true) { 10 }; 3333;",
+            expected_constants: &[10, 3333],
+            expected_instructions: &[
+                make(Opcode::OpTrue, &[]),
+                make(Opcode::OpJumpNotTruthy, &[10]),
+                make(Opcode::OpConstant, &[0]),
+                make(Opcode::OpJump, &[11]),
+                make(Opcode::OpNull, &[]),
+                make(Opcode::OpPop, &[]),
+                make(Opcode::OpConstant, &[1]),
+                make(Opcode::OpPop, &[]),
+            ],
+        }];
+
+        for (i, test) in tests.iter().enumerate() {
+            println!("{}", i);
+            run_int_compiler_test(test);
         }
     }
 }

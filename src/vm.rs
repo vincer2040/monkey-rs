@@ -7,6 +7,7 @@ use crate::{
 const STACK_SIZE: u16 = 2048;
 const INIT: Option<Object> = None;
 
+const NULL: Object = Object::Null;
 const TRUE: Object = Object::Boolean(true);
 const FALSE: Object = Object::Boolean(false);
 
@@ -79,6 +80,36 @@ impl<'a> VM<'a> {
                 }
                 Opcode::OpBang => self.execute_bang_operator()?,
                 Opcode::OpMinus => self.execute_minus_operator()?,
+                Opcode::OpJump => {
+                    let mut pos: usize = 0;
+                    let mut tmp = ip + 1;
+                    let s = self.instructions[tmp] as u16;
+                    tmp += 1;
+                    let e = self.instructions[tmp];
+                    pos |= (s << 8) as usize;
+                    pos |= e as usize;
+                    ip = pos - 1;
+                }
+                Opcode::OpJumpNotTruthy => {
+                    let mut pos: usize = 0;
+                    let mut tmp = ip + 1;
+                    let s = self.instructions[tmp] as u16;
+                    tmp += 1;
+                    let e = self.instructions[tmp];
+                    pos |= (s << 8) as usize;
+                    pos |= e as usize;
+                    ip += 2;
+                    let cond = match self.pop() {
+                        Some(c) => c,
+                        None => return Err(anyhow::anyhow!("pop returned None")),
+                    };
+                    if !VM::is_truthy(cond) {
+                        ip = pos - 1;
+                    }
+                }
+                Opcode::OpNull => {
+                    self.push(NULL)?;
+                }
                 _ => todo!(),
             };
             ip += 1;
@@ -164,6 +195,8 @@ impl<'a> VM<'a> {
                     return self.push(FALSE);
                 } else if *v == FALSE {
                     return self.push(TRUE);
+                } else if *v == NULL {
+                    return self.push(TRUE);
                 } else {
                     return self.push(FALSE);
                 }
@@ -189,14 +222,6 @@ impl<'a> VM<'a> {
         }
     }
 
-    fn native_bool_to_boolean_object(input: bool) -> Object {
-        if input {
-            TRUE
-        } else {
-            FALSE
-        }
-    }
-
     fn push(&mut self, obj: Object) -> anyhow::Result<()> {
         if self.sp >= STACK_SIZE {
             return Err(anyhow::anyhow!("stack overflow"));
@@ -210,6 +235,22 @@ impl<'a> VM<'a> {
         let o = &self.stack[(self.sp - 1) as usize];
         self.sp -= 1;
         o.as_ref()
+    }
+
+    fn native_bool_to_boolean_object(input: bool) -> Object {
+        if input {
+            TRUE
+        } else {
+            FALSE
+        }
+    }
+
+    fn is_truthy(obj: &Object) -> bool {
+        match obj {
+            Object::Null => false,
+            Object::Boolean(v) => *v,
+            _ => true,
+        }
     }
 }
 
@@ -231,6 +272,10 @@ mod test {
     struct VmTestBoolCase {
         input: &'static str,
         expected: bool,
+    }
+
+    struct VmNullTestCase {
+        input: &'static str,
     }
 
     fn parse(input: &'static str) -> Program {
@@ -284,6 +329,18 @@ mod test {
         } else {
             panic!("stack_top returned None");
         }
+        Ok(())
+    }
+
+    fn run_null_vm_test(test: &VmNullTestCase) -> anyhow::Result<()> {
+        let program = parse(test.input);
+        let mut compiler = Compiler::new();
+        compiler.compile(&program)?;
+        let byte_code = compiler.byte_code();
+        let mut vm = VM::new(&byte_code);
+        vm.run()?;
+        let stack_elem = vm.last_popped_stack_elem();
+        assert_eq!(stack_elem, Some(Object::Null).as_ref());
         Ok(())
     }
 
@@ -462,10 +519,59 @@ mod test {
                 input: "!!5",
                 expected: true,
             },
+            VmTestBoolCase {
+                input: "!(if (false) { 5; })",
+                expected: true,
+            },
         ];
 
         for test in tests.iter() {
             run_bool_vm_test(test)?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_conditionals() -> anyhow::Result<()> {
+        let tests = [
+            VmTestIntCase {
+                input: "if (true) { 10 }",
+                expected: 10,
+            },
+            VmTestIntCase {
+                input: "if (true) { 10 } else { 20 }",
+                expected: 10,
+            },
+            VmTestIntCase {
+                input: "if (false) { 10 } else { 20 } ",
+                expected: 20,
+            },
+            VmTestIntCase {
+                input: "if ((if (false) { 10 })) { 10 } else { 20 }",
+                expected: 20,
+            },
+        ];
+
+        for test in tests.iter() {
+            run_int_vm_test(test)?;
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_null_condition() -> anyhow::Result<()> {
+        let tests = [
+            VmNullTestCase {
+                input: "if (1 > 2) { 10 }",
+            },
+            VmNullTestCase {
+                input: "if (false) { 10 }",
+            },
+        ];
+
+        for test in tests.iter() {
+            run_null_vm_test(test)?;
         }
         Ok(())
     }

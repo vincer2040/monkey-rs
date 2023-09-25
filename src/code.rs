@@ -72,6 +72,21 @@ const OP_BANG: Definition = Definition {
     operand_widths: &[],
 };
 
+const OP_JUMP_NOT_TRUTHY: Definition = Definition {
+    name: "OpJumpNotTruthy",
+    operand_widths: &[2],
+};
+
+const OP_JUMP: Definition = Definition {
+    name: "OpJump",
+    operand_widths: &[2],
+};
+
+const OP_NULL: Definition = Definition {
+    name: "OpNull",
+    operand_widths: &[],
+};
+
 pub trait InstructionsString {
     fn string(&self) -> String;
 }
@@ -91,6 +106,9 @@ pub enum Opcode {
     OpGreaterThan = 10,
     OpMinus = 11,
     OpBang = 12,
+    OpJumpNotTruthy = 13,
+    OpJump = 14,
+    OpNull = 15,
 }
 
 impl Display for Opcode {
@@ -109,6 +127,9 @@ impl Display for Opcode {
             Opcode::OpGreaterThan => write!(f, "{}", 10),
             Opcode::OpMinus => write!(f, "{}", 11),
             Opcode::OpBang => write!(f, "{}", 12),
+            Opcode::OpJumpNotTruthy => write!(f, "{}", 13),
+            Opcode::OpJump => write!(f, "{}", 14),
+            Opcode::OpNull => write!(f, "{}", 15),
         }
     }
 }
@@ -129,6 +150,9 @@ impl Into<Opcode> for u8 {
             10 => Opcode::OpGreaterThan,
             11 => Opcode::OpMinus,
             12 => Opcode::OpBang,
+            13 => Opcode::OpJumpNotTruthy,
+            14 => Opcode::OpJump,
+            15 => Opcode::OpNull,
             _ => unreachable!("unkown u8 opcode {}", self),
         }
     }
@@ -184,6 +208,9 @@ pub fn lookup(op: &Opcode) -> Definition {
         Opcode::OpGreaterThan => OP_GREATER_THAN,
         Opcode::OpMinus => OP_MINUS,
         Opcode::OpBang => OP_BANG,
+        Opcode::OpJumpNotTruthy => OP_JUMP_NOT_TRUTHY,
+        Opcode::OpJump => OP_JUMP,
+        Opcode::OpNull => OP_NULL,
     }
 }
 
