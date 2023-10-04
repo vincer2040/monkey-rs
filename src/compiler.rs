@@ -263,7 +263,10 @@ impl Compiler {
                 let added_constant = self.add_constant(compiled_fn);
                 self.emit(Opcode::OpConstant, &[added_constant]);
             }
-            _ => todo!(),
+            Expression::CallExpression(call) => {
+                self.compile_expression(&call.function)?;
+                self.emit(Opcode::OpCall, &[]);
+            }
         };
         Ok(())
     }
@@ -1126,6 +1129,47 @@ mod test {
             expected_constants: &[FunctionConstant::Instructions(&t)],
             expected_instructions: &[make(Opcode::OpConstant, &[0]), make(Opcode::OpPop, &[])],
         }];
+
+        for test in tests.iter() {
+            run_function_compiler_test(test);
+        }
+    }
+
+    #[test]
+    fn test_function_calls() {
+        let x = [
+            make(Opcode::OpConstant, &[0]),
+            make(Opcode::OpReturnValue, &[]),
+        ];
+        let tests = [
+            CompilerFunctionTestCase {
+                input: "fn() { 24 }();",
+                expected_constants: &[
+                    FunctionConstant::Integer(24),
+                    FunctionConstant::Instructions(&x),
+                ],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[1]),
+                    make(Opcode::OpCall, &[]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+            CompilerFunctionTestCase {
+                input: "let noArg = fn() { 24 };
+                        noArg();",
+                expected_constants: &[
+                    FunctionConstant::Integer(24),
+                    FunctionConstant::Instructions(&x),
+                ],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[1]),
+                    make(Opcode::OpSetGlobal, &[0]),
+                    make(Opcode::OpGetGlobal, &[0]),
+                    make(Opcode::OpCall, &[]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+        ];
 
         for test in tests.iter() {
             run_function_compiler_test(test);
