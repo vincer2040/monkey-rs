@@ -107,6 +107,11 @@ const OP_HASH: Definition = Definition {
     operand_widths: &[2],
 };
 
+const OP_INDEX: Definition = Definition {
+    name: "OpIndex",
+    operand_widths: &[]
+};
+
 pub trait InstructionsString {
     fn string(&self) -> String;
 }
@@ -133,6 +138,7 @@ pub enum Opcode {
     OpGetGlobal = 17,
     OpArray = 18,
     OpHash = 19,
+    OpIndex = 20,
 }
 
 impl Display for Opcode {
@@ -158,6 +164,7 @@ impl Display for Opcode {
             Opcode::OpGetGlobal => write!(f, "{}", 17),
             Opcode::OpArray => write!(f, "{}", 18),
             Opcode::OpHash => write!(f, "{}", 19),
+            Opcode::OpIndex => write!(f, "{}", 20),
         }
     }
 }
@@ -185,6 +192,7 @@ impl Into<Opcode> for u8 {
             17 => Opcode::OpGetGlobal,
             18 => Opcode::OpArray,
             19 => Opcode::OpHash,
+            20 => Opcode::OpIndex,
             _ => unreachable!("unkown u8 opcode {}", self),
         }
     }
@@ -243,6 +251,7 @@ pub fn lookup(op: &Opcode) -> Definition {
         Opcode::OpGetGlobal => OP_GET_GLOBAL,
         Opcode::OpArray => OP_ARRAY,
         Opcode::OpHash => OP_HASH,
+        Opcode::OpIndex => OP_INDEX,
     }
 }
 

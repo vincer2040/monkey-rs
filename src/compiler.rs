@@ -184,6 +184,11 @@ impl Compiler {
                 }
                 self.emit(Opcode::OpHash, &[keys.len() * 2]);
             }
+            Expression::IndexExpression(idx) => {
+                self.compile_expression(&idx.left)?;
+                self.compile_expression(&idx.index)?;
+                self.emit(Opcode::OpIndex, &[]);
+            }
             _ => todo!(),
         };
         Ok(())
@@ -861,6 +866,45 @@ mod test {
                     make(Opcode::OpPop, &[]),
                 ],
             },
+        ];
+
+        for test in tests.iter() {
+            run_array_compiler_test(test);
+        }
+    }
+
+    #[test]
+    fn test_index_expression() {
+        let tests = [
+            CompilerArrayTestCase {
+                input: "[1, 2, 3][1 + 1]",
+                expected_constants: &[1, 2, 3, 1, 1],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpConstant, &[1]),
+                    make(Opcode::OpConstant, &[2]),
+                    make(Opcode::OpArray, &[3]),
+                    make(Opcode::OpConstant, &[3]),
+                    make(Opcode::OpConstant, &[4]),
+                    make(Opcode::OpAdd, &[]),
+                    make(Opcode::OpIndex, &[]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+            CompilerArrayTestCase {
+                input: "{1: 2}[2 - 1]",
+                expected_constants: &[1, 2, 2, 1],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpConstant, &[1]),
+                    make(Opcode::OpHash, &[2]),
+                    make(Opcode::OpConstant, &[2]),
+                    make(Opcode::OpConstant, &[3]),
+                    make(Opcode::OpSub, &[]),
+                    make(Opcode::OpIndex, &[]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            }
         ];
 
         for test in tests.iter() {

@@ -183,6 +183,17 @@ impl<'a> VM<'a> {
                     self.sp -= num_elements;
                     self.push(hash)?;
                 }
+                Opcode::OpIndex => {
+                    let index = match self.pop() {
+                        Some(v) => v.clone(),
+                        None => return Err(anyhow::anyhow!("pop returned none index")),
+                    };
+                    let left = match self.pop() {
+                        Some(v) => v.clone(),
+                        None => return Err(anyhow::anyhow!("pop returned none index")),
+                    };
+                    self.execute_index_expression(&left, &index)?;
+                }
             };
             ip += 1;
         }
@@ -351,6 +362,50 @@ impl<'a> VM<'a> {
         Ok(Object::Hash(hash))
     }
 
+    fn execute_index_expression(&mut self, left: &Object, index: &Object) -> anyhow::Result<()> {
+        match left {
+            Object::Array(arr) => {
+                if let Object::Integer(idx) = index {
+                    self.execute_array_index(arr, *idx)
+                } else {
+                    return Err(anyhow::anyhow!(
+                        "index operator not supported {}",
+                        left.type_string()
+                    ));
+                }
+            }
+            Object::Hash(hash) => self.execute_hash_index(hash, index),
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "index operator not supported {}",
+                    left.type_string()
+                ));
+            }
+        }
+    }
+
+    fn execute_array_index(&mut self, left: &Array, idx: i64) -> anyhow::Result<()> {
+        let max = if left.elements.len() > 0 {
+            (left.elements.len() - 1) as i64
+        } else {
+            -1
+        };
+        if idx < 0 || idx > max {
+            return self.push(NULL);
+        }
+        return self.push(left.elements[idx as usize].clone());
+    }
+
+    fn execute_hash_index(&mut self, left: &Hash, idx: &Object) -> anyhow::Result<()> {
+        for pair in left.pairs.iter() {
+            let key = &pair.0;
+            if key == idx {
+                return self.push(pair.1.clone());
+            }
+        }
+        return self.push(NULL);
+    }
+
     fn push(&mut self, obj: Object) -> anyhow::Result<()> {
         if self.sp >= STACK_SIZE {
             return Err(anyhow::anyhow!("stack overflow"));
@@ -414,6 +469,11 @@ mod test {
     struct VmTestArrayCase {
         input: &'static str,
         expected: &'static [i64],
+    }
+
+    struct VmTestIntNullCase {
+        input: &'static str,
+        expected: Option<i64>,
     }
 
     struct VmTestHashCase {
@@ -563,6 +623,24 @@ mod test {
             test_int_hash_object(test.expected, obj);
         } else {
             panic!("stack_top returned none");
+        }
+        Ok(())
+    }
+
+    fn run_index_vm_test(test: &VmTestIntNullCase) -> anyhow::Result<()> {
+        let program = parse(test.input);
+        let mut compiler = Compiler::new();
+        compiler.compile(&program)?;
+        let byte_code = compiler.byte_code();
+        let mut vm = VM::new(&byte_code);
+        vm.run()?;
+        let stack_elem = vm.last_popped_stack_elem();
+        if let Some(obj) = stack_elem {
+            match test.expected {
+                Some(v) => test_integer_object(v, obj),
+                None => assert_eq!(*obj, Object::Null),
+            }
+        } else {
         }
         Ok(())
     }
@@ -887,6 +965,57 @@ mod test {
         ];
         for test in tests.iter() {
             run_hash_vm_test(test)?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_index_expression() -> anyhow::Result<()> {
+        let tests = [
+            VmTestIntNullCase {
+                input: "[1, 2, 3][1]",
+                expected: Some(2),
+            },
+            VmTestIntNullCase {
+                input: "[1, 2, 3][0 + 2]",
+                expected: Some(3),
+            },
+            VmTestIntNullCase {
+                input: "[[1, 1, 1]][0][0]",
+                expected: Some(1),
+            },
+            VmTestIntNullCase {
+                input: "[][0]",
+                expected: None,
+            },
+            VmTestIntNullCase {
+                input: "[1, 2, 3][99]",
+                expected: None,
+            },
+            VmTestIntNullCase {
+                input: "[1][-1]",
+                expected: None,
+            },
+            VmTestIntNullCase {
+                input: "{1: 1, 2: 2}[1]",
+                expected: Some(1),
+            },
+            VmTestIntNullCase {
+                input: "{1: 1, 2: 2}[2]",
+                expected: Some(2),
+            },
+            VmTestIntNullCase {
+                input: "{1: 1}[0]",
+                expected: None,
+            },
+            VmTestIntNullCase {
+                input: "{}[0]",
+                expected: None,
+            },
+        ];
+
+        for test in tests.iter() {
+            run_index_vm_test(test)?;
         }
         Ok(())
     }
