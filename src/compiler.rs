@@ -1,6 +1,6 @@
 use crate::{
     ast::{
-        Expression, InfixExpression, InfixOperator, IntegerLiteral, PrefixOperator, Program,
+        Expression, InfixExpression, InfixOperator, IntegerLiteral, Node, PrefixOperator, Program,
         Statement,
     },
     code::{make, Instructions, Opcode},
@@ -171,6 +171,18 @@ impl Compiler {
                     self.compile_expression(el)?;
                 }
                 self.emit(Opcode::OpArray, &[len]);
+            }
+            Expression::Hash(hash) => {
+                let mut keys = Vec::new();
+                for k in hash.pairs.iter() {
+                    keys.push(k.clone());
+                }
+                keys.sort_by(|a, b| a.0.string().cmp(&b.0.string()));
+                for k in keys.iter() {
+                    self.compile_expression(&k.0)?;
+                    self.compile_expression(&k.1)?;
+                }
+                self.emit(Opcode::OpHash, &[keys.len() * 2]);
             }
             _ => todo!(),
         };
@@ -801,6 +813,51 @@ mod test {
                     make(Opcode::OpConstant, &[5]),
                     make(Opcode::OpMul, &[]),
                     make(Opcode::OpArray, &[3]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+        ];
+
+        for test in tests.iter() {
+            run_array_compiler_test(test);
+        }
+    }
+
+    #[test]
+    fn test_hash_literals() {
+        let tests = [
+            CompilerArrayTestCase {
+                input: "{}",
+                expected_constants: &[],
+                expected_instructions: &[make(Opcode::OpHash, &[0]), make(Opcode::OpPop, &[])],
+            },
+            CompilerArrayTestCase {
+                input: "{1: 2, 3: 4, 5: 6}",
+                expected_constants: &[1, 2, 3, 4, 5, 6],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpConstant, &[1]),
+                    make(Opcode::OpConstant, &[2]),
+                    make(Opcode::OpConstant, &[3]),
+                    make(Opcode::OpConstant, &[4]),
+                    make(Opcode::OpConstant, &[5]),
+                    make(Opcode::OpHash, &[6]),
+                    make(Opcode::OpPop, &[]),
+                ],
+            },
+            CompilerArrayTestCase {
+                input: "{1: 2 + 3, 4: 5 * 6}",
+                expected_constants: &[1, 2, 3, 4, 5, 6],
+                expected_instructions: &[
+                    make(Opcode::OpConstant, &[0]),
+                    make(Opcode::OpConstant, &[1]),
+                    make(Opcode::OpConstant, &[2]),
+                    make(Opcode::OpAdd, &[]),
+                    make(Opcode::OpConstant, &[3]),
+                    make(Opcode::OpConstant, &[4]),
+                    make(Opcode::OpConstant, &[5]),
+                    make(Opcode::OpMul, &[]),
+                    make(Opcode::OpHash, &[4]),
                     make(Opcode::OpPop, &[]),
                 ],
             },

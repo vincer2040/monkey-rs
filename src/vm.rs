@@ -1,7 +1,7 @@
 use crate::{
     code::{Instructions, Opcode},
     compiler::ByteCode,
-    object::{Array, Object, ObjectTrait, ObjectType},
+    object::{Array, Hash, Object, ObjectTrait, ObjectType},
 };
 
 const STACK_SIZE: usize = 2048;
@@ -169,6 +169,20 @@ impl<'a> VM<'a> {
                     self.sp -= num_elements;
                     self.push(arr)?;
                 }
+                Opcode::OpHash => {
+                    let mut num_elements: usize = 0;
+                    let mut tmp = ip + 1;
+                    let s = self.instructions[tmp] as u16;
+                    tmp += 1;
+                    let e = self.instructions[tmp];
+                    num_elements |= (s << 8) as usize;
+                    num_elements |= e as usize;
+                    ip += 2;
+
+                    let hash = self.build_hash(self.sp - num_elements, self.sp)?;
+                    self.sp -= num_elements;
+                    self.push(hash)?;
+                }
             };
             ip += 1;
         }
@@ -317,6 +331,26 @@ impl<'a> VM<'a> {
         Ok(Object::Array(arr))
     }
 
+    fn build_hash(&mut self, start: usize, end: usize) -> anyhow::Result<Object> {
+        let mut elements: Vec<(Object, Object)> = Vec::with_capacity(end - start);
+        let mut s = start;
+        while s < end {
+            let key = match &self.stack[s] {
+                Some(v) => v.clone(),
+                None => return Err(anyhow::anyhow!("stack is None at {}", s)),
+            };
+            let val = match &self.stack[s + 1] {
+                Some(v) => v.clone(),
+                None => return Err(anyhow::anyhow!("stack is None at {}", s)),
+            };
+            let pair = (key, val);
+            elements.push(pair);
+            s += 2;
+        }
+        let hash = Hash { pairs: elements };
+        Ok(Object::Hash(hash))
+    }
+
     fn push(&mut self, obj: Object) -> anyhow::Result<()> {
         if self.sp >= STACK_SIZE {
             return Err(anyhow::anyhow!("stack overflow"));
@@ -382,6 +416,11 @@ mod test {
         expected: &'static [i64],
     }
 
+    struct VmTestHashCase {
+        input: &'static str,
+        expected: &'static [(i64, i64)],
+    }
+
     fn parse(input: &'static str) -> Program {
         let l = Lexer::new(input);
         let mut p = Parser::new(l);
@@ -420,6 +459,19 @@ mod test {
             }
         } else {
             panic!("{:#?} is not an array", actual);
+        }
+    }
+
+    fn test_int_hash_object(exp: &[(i64, i64)], actual: &Object) {
+        if let Object::Hash(hash) = actual {
+            assert_eq!(exp.len(), hash.pairs.len());
+            for (i, pair) in exp.iter().enumerate() {
+                let got = &hash.pairs[i];
+                test_integer_object(pair.0, &got.0);
+                test_integer_object(pair.1, &got.1);
+            }
+        } else {
+            panic!("{:#?} is not a hash", actual);
         }
     }
 
@@ -495,6 +547,22 @@ mod test {
             test_int_array_object(test.expected, obj);
         } else {
             panic!("stack_top returned None");
+        }
+        Ok(())
+    }
+
+    fn run_hash_vm_test(test: &VmTestHashCase) -> anyhow::Result<()> {
+        let program = parse(test.input);
+        let mut compiler = Compiler::new();
+        compiler.compile(&program)?;
+        let byte_code = compiler.byte_code();
+        let mut vm = VM::new(&byte_code);
+        vm.run()?;
+        let stack_elem = vm.last_popped_stack_elem();
+        if let Some(obj) = stack_elem {
+            test_int_hash_object(test.expected, obj);
+        } else {
+            panic!("stack_top returned none");
         }
         Ok(())
     }
@@ -797,6 +865,28 @@ mod test {
 
         for test in tests.iter() {
             run_array_vm_test(test)?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_hash_literals() -> anyhow::Result<()> {
+        let tests = [
+            VmTestHashCase {
+                input: "{}",
+                expected: &[],
+            },
+            VmTestHashCase {
+                input: "{1: 2, 3: 4}",
+                expected: &[(1, 2), (3, 4)],
+            },
+            VmTestHashCase {
+                input: "{1 + 1: 2 * 2, 3 + 3: 4 * 4}",
+                expected: &[(2, 4), (6, 16)],
+            },
+        ];
+        for test in tests.iter() {
+            run_hash_vm_test(test)?;
         }
         Ok(())
     }
