@@ -109,7 +109,22 @@ const OP_HASH: Definition = Definition {
 
 const OP_INDEX: Definition = Definition {
     name: "OpIndex",
-    operand_widths: &[]
+    operand_widths: &[],
+};
+
+const OP_CALL: Definition = Definition {
+    name: "OpCall",
+    operand_widths: &[],
+};
+
+const OP_RETURN_VALUE: Definition = Definition {
+    name: "OpReturnValue",
+    operand_widths: &[],
+};
+
+const OP_RETURN: Definition = Definition {
+    name: "OpReturn",
+    operand_widths: &[],
 };
 
 pub trait InstructionsString {
@@ -139,6 +154,9 @@ pub enum Opcode {
     OpArray = 18,
     OpHash = 19,
     OpIndex = 20,
+    OpCall = 21,
+    OpReturnValue = 22,
+    OpReturn = 23,
 }
 
 impl Display for Opcode {
@@ -165,6 +183,9 @@ impl Display for Opcode {
             Opcode::OpArray => write!(f, "{}", 18),
             Opcode::OpHash => write!(f, "{}", 19),
             Opcode::OpIndex => write!(f, "{}", 20),
+            Opcode::OpCall => write!(f, "{}", 21),
+            Opcode::OpReturnValue => write!(f, "{}", 22),
+            Opcode::OpReturn => write!(f, "{}", 23),
         }
     }
 }
@@ -193,6 +214,9 @@ impl Into<Opcode> for u8 {
             18 => Opcode::OpArray,
             19 => Opcode::OpHash,
             20 => Opcode::OpIndex,
+            21 => Opcode::OpCall,
+            22 => Opcode::OpReturnValue,
+            23 => Opcode::OpReturn,
             _ => unreachable!("unkown u8 opcode {}", self),
         }
     }
@@ -252,6 +276,9 @@ pub fn lookup(op: &Opcode) -> Definition {
         Opcode::OpArray => OP_ARRAY,
         Opcode::OpHash => OP_HASH,
         Opcode::OpIndex => OP_INDEX,
+        Opcode::OpCall => OP_CALL,
+        Opcode::OpReturnValue => OP_RETURN_VALUE,
+        Opcode::OpReturn => OP_RETURN,
     }
 }
 

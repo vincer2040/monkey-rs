@@ -1,5 +1,6 @@
 use crate::{
     ast::{BlockStatement, Identifier, Node},
+    code::Instructions,
     environment::Environment,
 };
 
@@ -33,6 +34,7 @@ pub enum ObjectType {
     Builtin,
     Array,
     Hash,
+    CompiledFunction,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -47,6 +49,7 @@ pub enum Object {
     Builtin(Builtin),
     Array(Array),
     Hash(Hash),
+    CompiledFunction(CompiledFunction),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -54,6 +57,11 @@ pub struct Function {
     pub parameters: Vec<Identifier>,
     pub body: BlockStatement,
     pub env: Environment,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct CompiledFunction {
+    pub instructions: Instructions,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -74,6 +82,7 @@ impl ObjectTrait for Object {
             Self::Builtin(_) => ObjectType::Builtin,
             Self::Array(_) => ObjectType::Array,
             Self::Hash(_) => ObjectType::Hash,
+            Self::CompiledFunction(_) => ObjectType::CompiledFunction,
         }
     }
     fn type_string(&self) -> &'static str {
@@ -88,6 +97,7 @@ impl ObjectTrait for Object {
             Self::Builtin(_) => "BUILTIN",
             Self::Array(_) => "ARRAY",
             Self::Hash(_) => "HASH",
+            Self::CompiledFunction(_) => "COMPILED_FUNCTION",
         }
     }
 
@@ -141,6 +151,9 @@ impl ObjectTrait for Object {
                 }
                 res.push('}');
                 res
+            }
+            Self::CompiledFunction(func) => {
+                format!("CompiledFunction[{:p}]", func)
             }
         }
     }
