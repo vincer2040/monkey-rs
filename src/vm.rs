@@ -1,7 +1,7 @@
 use crate::{
     code::{Instructions, Opcode},
     compiler::ByteCode,
-    object::{Array, Hash, Object, ObjectTrait, ObjectType},
+    object::{Array, CompiledFunction, Hash, Object, ObjectTrait, ObjectType},
 };
 
 const STACK_SIZE: usize = 2048;
@@ -13,22 +13,46 @@ const TRUE: Object = Object::Boolean(true);
 const FALSE: Object = Object::Boolean(false);
 
 #[derive(Clone)]
+pub struct Frame {
+    pub func: CompiledFunction,
+    pub ip: isize,
+}
+
+impl Frame {
+    pub fn new(func: CompiledFunction) -> Self {
+        Self { func, ip: -1 }
+    }
+
+    pub fn instructions(&self) -> &Instructions {
+        return &self.func.instructions;
+    }
+}
+
+#[derive(Clone)]
 pub struct VM<'a> {
     constants: &'a Vec<Object>,
-    instructions: &'a Instructions,
     stack: [Option<Object>; STACK_SIZE],
-    pub globals: Vec<Option<Object>>,
     sp: usize,
+    pub globals: Vec<Option<Object>>,
+    pub frames: Vec<Frame>,
+    pub frames_idx: isize,
 }
 
 impl<'a> VM<'a> {
     pub fn new(byte_code: &'a ByteCode) -> Self {
+        let main_fn = CompiledFunction {
+            instructions: byte_code.instructions.to_vec(),
+        };
+        let main_frame = Frame::new(main_fn);
+        let mut frames = Vec::new();
+        frames.push(main_frame);
         Self {
             constants: byte_code.constants,
-            instructions: byte_code.instructions,
             stack: [INIT; STACK_SIZE as usize],
-            globals: [INIT; GLOBAL_SIZE].to_vec(),
             sp: 0,
+            globals: [INIT; GLOBAL_SIZE].to_vec(),
+            frames,
+            frames_idx: 1,
         }
     }
 
@@ -49,20 +73,26 @@ impl<'a> VM<'a> {
     }
 
     pub fn run(&mut self) -> anyhow::Result<()> {
-        let mut ip = 0;
-        while ip < self.instructions.len() {
-            let op: Opcode = self.instructions[ip].into();
+        let mut ip;
+        let mut ins: &Instructions;
+        let mut op: Opcode;
+        while self.current_frame().ip < (self.current_frame().instructions().len() - 1) as isize {
+            self.current_frame().ip += 1;
+            ip = self.current_frame().ip;
+            ins = self.current_frame().instructions();
+            op = ins[ip as usize].into();
             match op {
                 Opcode::OpConstant => {
                     let mut const_idx: usize = 0;
                     ip += 1;
-                    let s = self.instructions[ip] as u16;
+                    let s = ins[ip as usize] as u16;
                     ip += 1;
-                    let e = self.instructions[ip];
+                    let e = ins[ip as usize];
                     const_idx |= (s << 8) as usize;
                     const_idx |= e as usize;
                     let o = &self.constants[const_idx];
                     self.push(o.clone())?;
+                    self.current_frame().ip += 2;
                 }
                 Opcode::OpAdd | Opcode::OpMul | Opcode::OpSub | Opcode::OpDiv => {
                     let right = match self.pop() {
@@ -101,29 +131,29 @@ impl<'a> VM<'a> {
                 Opcode::OpMinus => self.execute_minus_operator()?,
                 Opcode::OpJump => {
                     let mut pos: usize = 0;
-                    let mut tmp = ip + 1;
-                    let s = self.instructions[tmp] as u16;
-                    tmp += 1;
-                    let e = self.instructions[tmp];
+                    ip += 1;
+                    let s = ins[ip as usize] as u16;
+                    ip += 1;
+                    let e = ins[ip as usize];
                     pos |= (s << 8) as usize;
                     pos |= e as usize;
-                    ip = pos - 1;
+                    self.current_frame().ip = (pos - 1) as isize;
                 }
                 Opcode::OpJumpNotTruthy => {
                     let mut pos: usize = 0;
-                    let mut tmp = ip + 1;
-                    let s = self.instructions[tmp] as u16;
-                    tmp += 1;
-                    let e = self.instructions[tmp];
+                    ip += 1;
+                    let s = ins[ip as usize] as u16;
+                    ip += 1;
+                    let e = ins[ip as usize];
                     pos |= (s << 8) as usize;
                     pos |= e as usize;
-                    ip += 2;
+                    self.current_frame().ip += 2;
                     let cond = match self.pop() {
                         Some(c) => c,
                         None => return Err(anyhow::anyhow!("pop returned None")),
                     };
                     if !VM::is_truthy(cond) {
-                        ip = pos - 1;
+                        self.current_frame().ip = (pos - 1) as isize;
                     }
                 }
                 Opcode::OpNull => {
@@ -131,24 +161,24 @@ impl<'a> VM<'a> {
                 }
                 Opcode::OpSetGlobal => {
                     let mut global_idx: usize = 0;
-                    let mut tmp = ip + 1;
-                    let s = self.instructions[tmp] as u16;
-                    tmp += 1;
-                    let e = self.instructions[tmp];
+                    ip += 1;
+                    let s = ins[ip as usize] as u16;
+                    ip += 1;
+                    let e = ins[ip as usize];
                     global_idx |= (s << 8) as usize;
                     global_idx |= e as usize;
-                    ip += 2;
+                    self.current_frame().ip += 2;
                     self.globals[global_idx] = self.pop().cloned();
                 }
                 Opcode::OpGetGlobal => {
                     let mut global_idx: usize = 0;
-                    let mut tmp = ip + 1;
-                    let s = self.instructions[tmp] as u16;
-                    tmp += 1;
-                    let e = self.instructions[tmp];
+                    ip += 1;
+                    let s = ins[ip as usize] as u16;
+                    ip += 1;
+                    let e = ins[ip as usize];
                     global_idx |= (s << 8) as usize;
                     global_idx |= e as usize;
-                    ip += 2;
+                    self.current_frame().ip += 2;
                     match &self.globals[global_idx] {
                         Some(obj) => {
                             self.push(obj.clone())?;
@@ -158,26 +188,26 @@ impl<'a> VM<'a> {
                 }
                 Opcode::OpArray => {
                     let mut num_elements: usize = 0;
-                    let mut tmp = ip + 1;
-                    let s = self.instructions[tmp] as u16;
-                    tmp += 1;
-                    let e = self.instructions[tmp];
+                    ip += 1;
+                    let s = ins[ip as usize] as u16;
+                    ip += 1;
+                    let e = ins[ip as usize];
                     num_elements |= (s << 8) as usize;
                     num_elements |= e as usize;
-                    ip += 2;
+                    self.current_frame().ip += 2;
                     let arr = self.build_array(self.sp - num_elements, num_elements)?;
                     self.sp -= num_elements;
                     self.push(arr)?;
                 }
                 Opcode::OpHash => {
                     let mut num_elements: usize = 0;
-                    let mut tmp = ip + 1;
-                    let s = self.instructions[tmp] as u16;
-                    tmp += 1;
-                    let e = self.instructions[tmp];
+                    ip += 1;
+                    let s = ins[ip as usize] as u16;
+                    ip += 1;
+                    let e = ins[ip as usize];
                     num_elements |= (s << 8) as usize;
                     num_elements |= e as usize;
-                    ip += 2;
+                    self.current_frame().ip += 2;
 
                     let hash = self.build_hash(self.sp - num_elements, self.sp)?;
                     self.sp -= num_elements;
@@ -194,10 +224,24 @@ impl<'a> VM<'a> {
                     };
                     self.execute_index_expression(&left, &index)?;
                 }
+                _ => todo!(),
             };
-            ip += 1;
         }
         Ok(())
+    }
+
+    fn current_frame(&mut self) -> &mut Frame {
+        &mut self.frames[(self.frames_idx - 1) as usize]
+    }
+
+    fn push_frame(&mut self, frame: Frame) {
+        self.frames.push(frame);
+        self.frames_idx += 1;
+    }
+
+    fn pop_frame(&mut self) -> &Frame {
+        self.frames_idx -= 1;
+        &self.frames[self.frames_idx as usize]
     }
 
     pub fn last_popped_stack_elem(&self) -> Option<&Object> {
