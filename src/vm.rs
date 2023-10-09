@@ -224,6 +224,31 @@ impl<'a> VM<'a> {
                     };
                     self.execute_index_expression(&left, &index)?;
                 }
+                Opcode::OpCall => {
+                    let func = match &self.stack[self.sp - 1] {
+                        Some(obj) => match obj {
+                            Object::CompiledFunction(f) => f,
+                            _ => {
+                                return Err(anyhow::anyhow!("{:#?} is not a function", obj));
+                            }
+                        },
+                        None => {
+                            return Err(anyhow::anyhow!("nothing on the stack"));
+                        }
+                    };
+
+                    let frame = Frame::new(func.clone());
+                    self.push_frame(frame);
+                }
+                Opcode::OpReturnValue => {
+                    let return_value = match self.pop() {
+                        Some(v) => v.clone(),
+                        None => return Err(anyhow::anyhow!("pop returned none")),
+                    };
+                    self.pop_frame();
+                    self.pop();
+                    self.push(return_value)?;
+                }
                 _ => todo!(),
             };
         }
@@ -460,9 +485,8 @@ impl<'a> VM<'a> {
     }
 
     fn pop(&mut self) -> Option<&Object> {
-        let o = &self.stack[self.sp - 1];
         self.sp -= 1;
-        o.as_ref()
+        self.stack[self.sp].as_ref()
     }
 
     fn native_bool_to_boolean_object(input: bool) -> Object {
@@ -1060,6 +1084,41 @@ mod test {
 
         for test in tests.iter() {
             run_index_vm_test(test)?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_function_calls_without_arguments() -> anyhow::Result<()> {
+        let tests = [
+            VmTestIntCase {
+                input: "
+                    let fivePlusTen = fn() { 5 + 10; };
+                    fivePlusTen();
+                ",
+                expected: 15,
+            },
+            // VmTestIntCase {
+            //     input: "
+            //         let one = fn() { 1; };
+            //         let two = fn() { 2; };
+            //         one() + two()
+            //     ",
+            //     expected: 3,
+            // },
+            VmTestIntCase {
+                input: "
+                    let a = fn() { 1 };
+                    let b = fn() { a() + 1 };
+                    let c = fn() { b() + 1 };
+                    c();
+                ",
+                expected: 3,
+            },
+        ];
+
+        for test in tests.iter() {
+            run_int_vm_test(test)?;
         }
         Ok(())
     }
