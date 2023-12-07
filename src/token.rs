@@ -32,3 +32,9 @@ pub enum Token {
     True,
     False,
 }
+
+impl Default for Token {
+    fn default() -> Self {
+        Token::Illegal
+    }
+}

@@ -56,8 +56,8 @@ impl Parser {
         self.errors.len()
     }
 
-    pub fn get_errors(&self) -> Vec<String> {
-        self.errors.clone()
+    pub fn get_errors(&self) -> &Vec<String> {
+        &self.errors
     }
 
     fn parse_statement(&mut self) -> Option<Statement> {
@@ -69,12 +69,12 @@ impl Parser {
     }
 
     fn parse_let_statement(&mut self) -> Option<Statement> {
-        let tok = self.cur.clone();
+        let tok = std::mem::take(&mut self.cur);
         let name: Identifier;
         if let Token::Ident(v) = self.peek.clone() {
             self.next_token();
             name = Identifier {
-                tok: self.cur.clone(),
+                tok: std::mem::take(&mut self.cur),
                 value: v.clone(),
             }
         } else {
@@ -101,7 +101,7 @@ impl Parser {
     }
 
     fn parse_return_statement(&mut self) -> Option<Statement> {
-        let tok = self.cur.clone();
+        let tok = std::mem::take(&mut self.cur);
         self.next_token();
         let value_opt = self.parse_expression(Precedence::Lowest);
         let res = match value_opt {
@@ -168,7 +168,7 @@ impl Parser {
                 | Token::Lt
                 | Token::Gt => {
                     self.next_token();
-                    let l = match left.clone() {
+                    let l = match left {
                         Some(exp) => exp,
                         None => return None,
                     };
@@ -176,7 +176,7 @@ impl Parser {
                 }
                 Token::LParen => {
                     self.next_token();
-                    let l = match left.clone() {
+                    let l = match left {
                         Some(exp) => exp,
                         None => return None,
                     };
@@ -184,7 +184,7 @@ impl Parser {
                 }
                 Token::LBracket => {
                     self.next_token();
-                    let l = match left.clone() {
+                    let l = match left {
                         Some(exp) => exp,
                         None => return None,
                     };
@@ -221,8 +221,8 @@ impl Parser {
     }
 
     fn parse_boolean_literal(&mut self) -> Expression {
-        let tok = self.cur.clone();
         let value = self.cur == Token::True;
+        let tok = std::mem::take(&mut self.cur);
         Expression::Boolean(BooleanLiteral { tok, value })
     }
 
@@ -243,7 +243,7 @@ impl Parser {
             Token::Bang => PrefixOperator::Bang,
             _ => return None,
         };
-        let tok = self.cur.clone();
+        let tok = std::mem::take(&mut self.cur);
         self.next_token();
         let right = self.parse_expression(Precedence::Prefix);
         match right {
@@ -268,8 +268,8 @@ impl Parser {
             Token::Gt => InfixOperator::Gt,
             _ => return None,
         };
-        let tok = self.cur.clone();
         let precedence = self.cur_precedence();
+        let tok = std::mem::take(&mut self.cur);
         self.next_token();
         let right = self.parse_expression(precedence);
         match right {
@@ -293,7 +293,7 @@ impl Parser {
     }
 
     fn parse_if_expression(&mut self) -> Option<Expression> {
-        let tok = self.cur.clone();
+        let tok = std::mem::take(&mut self.cur);
         if !self.expect_peek(Token::LParen) {
             return None;
         }
@@ -333,7 +333,7 @@ impl Parser {
 
     fn parse_block_statement(&mut self) -> BlockStatement {
         let mut statements = Vec::new();
-        let tok = self.cur.clone();
+        let tok = std::mem::take(&mut self.cur);
         self.next_token();
         while !self.cur_token_is(Token::RSquirly) && !self.cur_token_is(Token::Eof) {
             let stmt = self.parse_statement();
@@ -347,7 +347,7 @@ impl Parser {
     }
 
     fn parse_function_literal(&mut self) -> Option<Expression> {
-        let tok = self.cur.clone();
+        let tok = std::mem::take(&mut self.cur);
         if !self.expect_peek(Token::LParen) {
             return None;
         }
@@ -401,7 +401,7 @@ impl Parser {
     }
 
     fn parse_call_expression(&mut self, func: Expression) -> Option<Expression> {
-        let tok = self.cur.clone();
+        let tok = std::mem::take(&mut self.cur);
         let function = std::rc::Rc::new(func);
         match self.parse_expression_list(Token::RParen) {
             Some(arguments) => Some(Expression::CallExpression(CallExpression {
@@ -439,7 +439,7 @@ impl Parser {
     }
 
     fn parse_index_expression(&mut self, left_exp: Expression) -> Option<Expression> {
-        let tok = self.cur.clone();
+        let tok = std::mem::take(&mut self.cur);
         let left = std::rc::Rc::new(left_exp);
         self.next_token();
         match self.parse_expression(Precedence::Lowest) {
@@ -459,7 +459,7 @@ impl Parser {
     }
 
     fn parse_hash_literal(&mut self) -> Option<Expression> {
-        let tok = self.cur.clone();
+        let tok = std::mem::take(&mut self.cur);
         let mut pairs = Vec::new();
         while !self.peek_token_is(&Token::RSquirly) {
             self.next_token();
@@ -487,7 +487,7 @@ impl Parser {
     }
 
     fn next_token(&mut self) {
-        self.cur = self.peek.clone();
+        std::mem::swap(&mut self.cur, &mut self.peek);
         self.peek = self.l.next_token();
     }
 
