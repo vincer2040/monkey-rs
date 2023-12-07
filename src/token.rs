@@ -2,9 +2,9 @@
 pub enum Token {
     Illegal,
     Eof,
-    Ident(std::sync::Arc<str>),
-    Int(std::sync::Arc<str>),
-    String(std::sync::Arc<str>),
+    Ident(std::rc::Rc<str>),
+    Int(std::rc::Rc<str>),
+    String(std::rc::Rc<str>),
     Assign,
     Plus,
     Minus,

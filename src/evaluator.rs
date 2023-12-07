@@ -245,8 +245,8 @@ fn eval_integer_infix_expression(lval: i64, rval: i64, operator: &InfixOperator)
 }
 
 fn eval_string_infix_expression(
-    lval: &std::sync::Arc<str>,
-    rval: &std::sync::Arc<str>,
+    lval: &std::rc::Rc<str>,
+    rval: &std::rc::Rc<str>,
     operator: &InfixOperator,
 ) -> Object {
     if *operator != InfixOperator::Plus {
@@ -293,7 +293,7 @@ fn eval_block_statments(statements: &Vec<Statement>, env: &mut Environment) -> O
     obj
 }
 
-fn eval_identifier(name: &std::sync::Arc<str>, env: &Environment) -> Object {
+fn eval_identifier(name: &std::rc::Rc<str>, env: &Environment) -> Object {
     match env.get(name) {
         Some(v) => v.clone(),
         None => {

@@ -44,7 +44,7 @@ pub enum Object {
     Return(std::boxed::Box<Object>),
     Error(String),
     Function(Function),
-    String(std::sync::Arc<str>),
+    String(std::rc::Rc<str>),
     Builtin(Builtin),
     Array(Array),
     Hash(Hash),

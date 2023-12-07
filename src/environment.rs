@@ -2,7 +2,7 @@ use crate::object::Object;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Environment {
-    store: std::collections::HashMap<std::sync::Arc<str>, Object>,
+    store: std::collections::HashMap<std::rc::Rc<str>, Object>,
     outer: Option<std::boxed::Box<Environment>>,
 }
 
@@ -18,11 +18,11 @@ impl Environment {
         env
     }
 
-    pub fn set(&mut self, name: std::sync::Arc<str>, val: Object) {
+    pub fn set(&mut self, name: std::rc::Rc<str>, val: Object) {
         self.store.insert(name, val);
     }
 
-    pub fn get(&self, name: &std::sync::Arc<str>) -> Option<&Object> {
+    pub fn get(&self, name: &std::rc::Rc<str>) -> Option<&Object> {
         match self.store.get(name) {
             Some(obj) => Some(obj),
             None => match &self.outer {

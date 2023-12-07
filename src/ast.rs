@@ -27,7 +27,7 @@ pub struct LetStatement {
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct Identifier {
     pub tok: Token, /* the Ident token */
-    pub value: std::sync::Arc<str>,
+    pub value: std::rc::Rc<str>,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
@@ -73,7 +73,7 @@ pub struct BooleanLiteral {
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
 pub struct StringLiteral {
     pub tok: Token,
-    pub value: std::sync::Arc<str>,
+    pub value: std::rc::Rc<str>,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Hash)]
